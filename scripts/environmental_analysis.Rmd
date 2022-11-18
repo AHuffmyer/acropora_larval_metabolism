@@ -350,16 +350,20 @@ pendants$DateTime<-as.POSIXct(pendants$DateTime, format="%m/%d/%y %H:%M:%S", tz=
 pendants$DateTime <- force_tz(pendants$DateTime, tzone = "Pacific/Tahiti")
 ```
 
+Select the dates that are included for embryo rearing and exposure periods.  
+```{r}
+pendants<-pendants%>%filter(DateTime>as.POSIXct('2022-10-19 20:00:00', tz="Pacific/Tahiti"))
+```
+
+Remove time periods during logger read out.   
+```{r}
+pendants<-pendants%>%filter(DateTime<as.POSIXct('2022-10-28 16:30:00', tz="Pacific/Tahiti"))
+```
+
 List the logger serial numbers in this dataframe.  
 ```{r}
 levels(as.factor(pendants$logger))
 ```
-21002974
-21002979
-21002981
-21002982
-21335980
-21335987
 
 ## Read in treatment information  
 
@@ -416,67 +420,183 @@ Apply a lux to PPFD (µmol m-2 s-1) conversion factor (0.0185) as provided by Ap
 pendants$par<-pendants$lux.calibrated*0.0185
 ```
 
+Remove periods during tank cleaning where loggers were out of the water.  
+```{r}
+pendants<-pendants%>%filter(temp.calibrated>26.2)
+```
+
 ## Plot temperature    
 
 Plot raw data over time by tank colored by treatment.   
 ```{r}
 temp_plot<-pendants%>%
   
-  ggplot(aes(x=DateTime, y=temp.calibrated, colour=tank))+
+  ggplot(aes(x=DateTime, y=temp.calibrated, colour=treatment))+
   geom_line()+
-  scale_colour_manual(values=c("red", "red", "red", "blue", "blue", "blue"))+
-    geom_vline(xintercept = as.POSIXct("2022-10-19"), linetype="dashed", 
+  ylim(26, 30)+
+  scale_colour_manual(values=c("blue", "red"), name="Treatment")+
+    geom_vline(xintercept = as.POSIXct("2022-10-19 23:00:00", tz="Pacific/Tahiti"), linetype="solid", 
                 color = "black", size=0.5)+
-  geom_vline(xintercept = as.POSIXct("2022-10-24"), linetype="solid", 
+  geom_vline(xintercept = as.POSIXct("2022-10-24 08:00:00", tz="Pacific/Tahiti"), linetype="dashed", 
                 color = "black", size=0.5)+
+  geom_vline(xintercept = as.POSIXct("2022-10-28 08:00:00", tz="Pacific/Tahiti"), linetype="dotted", 
+                color = "black", size=0.5)+
+  ylab("Temperature (°C)")+
+  xlab("Date")+
   theme_classic(); temp_plot
+
+ggsave("figures/environmental/timeseries_temp.png", temp_plot, width=8, height=6)
 ```
 
-Remove temperature data from logger read outs and tank cleaning.  
+Note that the dips in temperature during exposure period are due to water turning off for symbiont addition.  
+
+Summarize by treatment with error shading for standard error.  
+```{r}
+temp_plot_treatment<-pendants%>%
+  group_by(treatment, DateTime)%>%
+  summarise(mean=mean(temp.calibrated, na.rm=TRUE), sd=sd(temp.calibrated, na.rm=TRUE), sem=sd/sqrt(6), upper=mean+sd, lower=mean-sd)%>%
+  
+  ggplot(aes(x=DateTime, y=mean, colour=treatment, fill=treatment))+
+  #geom_line()+
+  geom_ribbon(aes(ymin = lower, ymax = upper), alpha = 1, colour = NA, show.legend=FALSE) +
+  geom_smooth(method="loess", span=0.1, se=FALSE, aes(fill=treatment), alpha=0.3) +
+  ylim(26, 30)+
+  ylab("Temperature (°C)")+
+  xlab("Date")+
+  scale_colour_manual(values=c("blue", "red"), name="Treatment")+
+  scale_fill_manual(values=c("blue", "red"), name="Treatment")+
+  geom_vline(xintercept = as.POSIXct("2022-10-19 23:00:00", tz="Pacific/Tahiti"), linetype="solid", 
+                color = "black", size=0.5)+
+  geom_vline(xintercept = as.POSIXct("2022-10-24 08:00:00", tz="Pacific/Tahiti"), linetype="dashed", 
+                color = "black", size=0.5)+
+  geom_vline(xintercept = as.POSIXct("2022-10-28 08:00:00", tz="Pacific/Tahiti"), linetype="dotted", 
+                color = "black", size=0.5)+
+  theme_classic(); temp_plot_treatment
+
+ggsave("figures/environmental/timeseries_temperature_smooth.png", temp_plot_treatment, width=8, height=6)
+```
+
+Calculate the mean difference in temperature treatments.  
+```{r}
+pendants%>%
+  group_by(treatment, DateTime)%>%
+  summarise(mean=mean(temp.calibrated, na.rm=TRUE))%>%
+  spread(key=treatment, value=mean)%>%
+  filter(DateTime>as.POSIXct('2022-10-24 18:00:00', tz="Pacific/Tahiti"))%>%
+  summarise(difference=High-Ambient)%>%
+  summarise(mean=mean(difference))
+```
+
+Temperatures were on average 1.68 degrees higher in the high temperature treatment.  
+
+Calculate mean daily maximum temperature for each treatment during the exposure period.     
+```{r}
+pendants %>%
+  filter(DateTime>as.POSIXct('2022-10-24 18:00:00', tz="Pacific/Tahiti"))%>%
+  mutate(day = floor_date(DateTime, "day")) %>%
+           group_by(day, tank, treatment) %>%
+           summarise(max = max(temp.calibrated))%>%
+          group_by(treatment) %>%
+           summarise(mean_daily_max=mean(max))
+```
+The mean daily maximum temperature for the ambient treatment is 27.6 and the high treatment is 29.4 (approx. 1.8°C increase at daily max).  
 
 
+Calculate mean daily maximum temperature for each treatment during the exposure period.     
+```{r}
+pendants %>%
+  filter(DateTime>as.POSIXct('2022-10-24 18:00:00', tz="Pacific/Tahiti"))%>%
+  mutate(day = floor_date(DateTime, "day")) %>%
+           group_by(day, tank, treatment) %>%
+           summarise(min = min(temp.calibrated))%>%
+          group_by(treatment) %>%
+           summarise(mean_daily_max=mean(min))
+```
+The mean daily minimum temperature for the ambient treatment is 26.6 and the high treatment is 27.9 (approx. 1.3°C increase at daily min).  
 
-ADD PLOTS FOR DAILY FLUCTUATIONS 
-REMOVE LOW VALUES DURING READ OUT 
-
-
-
-
-
-
+Calculate mean daily fluctuation in temperature for each treatment during the exposure period.     
+```{r}
+pendants %>%
+  filter(DateTime>as.POSIXct('2022-10-24 18:00:00', tz="Pacific/Tahiti"))%>%
+  mutate(day = floor_date(DateTime, "day")) %>%
+           group_by(day, tank, treatment) %>%
+           summarise(max=max(temp.calibrated), min = min(temp.calibrated), change=max-min)%>%
+            group_by(treatment) %>%
+           summarise(mean_cycle=mean(change))
+```
+The mean daily fluctuation in temperature for the ambient treatment is 1°C and the high treatment is 1.5°C.  
 
 ## Plot light     
 
-Plot over time by tank in par units  
+Plot raw data over time by tank colored by treatment.   
 ```{r}
 light_plot<-pendants%>%
-  ggplot(aes(x=DateTime, y=par, colour=tank))+
-  ylab("PAR (umol m2 s)")+
-  scale_colour_manual(values=c("red", "red", "red", "blue", "blue", "blue"))+
-  geom_vline(xintercept = as.POSIXct("2022-10-19"), linetype="dashed", 
-                color = "black", size=0.5)+
-  geom_vline(xintercept = as.POSIXct("2022-10-24"), linetype="solid", 
-                color = "black", size=0.5)+
+  
+  ggplot(aes(x=DateTime, y=par, colour=treatment))+
   geom_line()+
+  #ylim(26, 30)+
+  scale_colour_manual(values=c("blue", "red"), name="Treatment")+
+    geom_vline(xintercept = as.POSIXct("2022-10-19 23:00:00", tz="Pacific/Tahiti"), linetype="solid", 
+                color = "black", size=0.5)+
+  geom_vline(xintercept = as.POSIXct("2022-10-24 08:00:00", tz="Pacific/Tahiti"), linetype="dashed", 
+                color = "black", size=0.5)+
+  geom_vline(xintercept = as.POSIXct("2022-10-28 08:00:00", tz="Pacific/Tahiti"), linetype="dotted", 
+                color = "black", size=0.5)+
+  ylab("Light (PPFD)")+
+  xlab("Date")+
   theme_classic(); light_plot
+
+ggsave("figures/environmental/timeseries_light.png", light_plot, width=8, height=6)
 ```
 
-Max daily PAR was ~150-250 in larval tanks.  
-
-Plot by lux
+Summarize by treatment with error shading for standard error.   
 ```{r}
-lux_plot<-pendants%>%
-  ggplot(aes(x=DateTime, y=lux.calibrated, colour=tank))+
-  ylab("Light (lux)")+
-    scale_colour_manual(values=c("red", "red", "red", "blue", "blue", "blue"))+
-    geom_vline(xintercept = as.numeric(as.POSIXct("2022-10-19")), linetype="dashed", 
+light_plot_treatment<-pendants%>%
+  group_by(treatment, DateTime)%>%
+  summarise(mean=mean(par, na.rm=TRUE), sd=sd(par, na.rm=TRUE), sem=sd/sqrt(6), upper=mean+sd, lower=mean-sd)%>%
+  
+  ggplot(aes(x=DateTime, y=mean, colour=treatment, fill=treatment))+
+  #geom_line()+
+  geom_ribbon(aes(ymin = lower, ymax = upper), alpha = 1, colour = NA, show.legend=FALSE) +
+  geom_smooth(method="loess", span=0.1, se=FALSE, aes(fill=treatment), alpha=0.3) +
+  #ylim(26, 30)+
+  ylab("Light (PAR)")+
+  xlab("Date")+
+  scale_colour_manual(values=c("blue", "red"), name="Treatment")+
+  scale_fill_manual(values=c("blue", "red"), name="Treatment")+
+  geom_vline(xintercept = as.POSIXct("2022-10-19 23:00:00", tz="Pacific/Tahiti"), linetype="solid", 
                 color = "black", size=0.5)+
-  geom_vline(xintercept = as.numeric(as.POSIXct("2022-10-24")), linetype="solid", 
+  geom_vline(xintercept = as.POSIXct("2022-10-24 08:00:00", tz="Pacific/Tahiti"), linetype="dashed", 
                 color = "black", size=0.5)+
-  geom_line()+
-  theme_classic(); lux_plot
+  geom_vline(xintercept = as.POSIXct("2022-10-28 08:00:00", tz="Pacific/Tahiti"), linetype="dotted", 
+                color = "black", size=0.5)+
+  theme_classic(); light_plot_treatment
+
+ggsave("figures/environmental/timeseries_light_smooth.png", light_plot_treatment, width=8, height=6)
 ```
 
+Calculate the mean difference in light between temperature treatments.  
+```{r}
+pendants%>%
+  group_by(treatment, DateTime)%>%
+  summarise(mean=mean(par, na.rm=TRUE))%>%
+  spread(key=treatment, value=mean)%>%
+  filter(DateTime>as.POSIXct('2022-10-24 18:00:00', tz="Pacific/Tahiti"))%>%
+  summarise(difference=High-Ambient)%>%
+  summarise(mean=mean(difference))
+```
 
-ADD CODE TO SAVE FILES OF INTEREST 
-ADD LIGHT OVER COURSE OF DAILY FLUCTUATION 
+Light were on average 1.49 PAR different between treatments (no difference).    
+
+Calculate mean daily maximum light for each treatment during the exposure period.     
+```{r}
+pendants %>%
+  filter(DateTime>as.POSIXct('2022-10-24 18:00:00', tz="Pacific/Tahiti"))%>%
+  mutate(day = floor_date(DateTime, "day")) %>%
+           group_by(day, tank, treatment) %>%
+           summarise(max = max(par))%>%
+          group_by(treatment) %>%
+           summarise(mean_daily_max=mean(max))
+```
+The mean daily maximum PAR for the ambient treatment is 106 and the high treatment is 112.    
+

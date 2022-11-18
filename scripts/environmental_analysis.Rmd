@@ -1,0 +1,482 @@
+---
+title: "Analyzing larval environmental data"
+author: "Ariana S Huffmyer"
+date: "11/15/2022"
+output: 
+  html_document:
+    code_folding: hide
+    toc: yes
+    toc_depth: 6
+    toc_float: yes
+editor_options: 
+  chunk_output_type: console
+---
+
+This script reads and plots environmental data from Hobo pendant loggers and daily measurements.  
+
+# Set Up    
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE, warning=FALSE, message=FALSE)
+```
+
+```{r}
+library(tidyverse)
+library(stringr)
+library(readxl)
+library(purrr)
+library(lubridate)
+library(ggplot2)
+library(seacarb)
+library(broom)
+library(cowplot)
+```
+
+# Daily measurements  
+
+## Read in file  
+
+Read in daily measurements file.  
+
+```{r}
+daily<-read_csv("data/environmental/daily_measurements/daily_measurements.csv")
+daily$date<-as.Date(daily$date, format="%m/%d/%y")
+daily$tank<-as.factor(daily$tank)
+daily$tris.date<-as.character(daily$tris.date)
+```
+
+## Correct salinity values  
+
+The salinity probe was calibrated on 20221026 by HP to 1000 uS/cm standard. The measurements before this date need to be corrected by applying a multiplication factor to all measurements before 20221026.  
+
+```{r}
+#calculate the average salinity values before and after the calibration 
+before<-daily%>%
+  filter(date<"2022-10-26")%>%
+  summarise(correction=mean(sal.psu)); before 
+#before = 38.2
+
+after<-daily%>%
+  filter(date>"2022-10-25")%>%
+  summarise(correction=mean(sal.psu)); after 
+#after=35.1
+
+correction<-before-after; correction
+#correction of 3.12 psu
+```
+
+Apply the correction by subtracting the value from all measurements before 2022-10-26. 
+```{r}
+daily<-daily%>%
+  mutate(sal.psu.cor=ifelse(date<"2022-10-26", sal.psu-correction$correction, sal.psu))
+```
+
+We will now use sal.psu.cor for future analyses.  
+
+## Calculate pH  
+
+Calculate the calibration curve from the Tris calibration and calculate pH on the total scale from pH.mV.   
+```{r}
+pHcalib<-read_csv("data/environmental/daily_measurements/20220924_Tris_Calibration.csv")
+pHcalib$tris.date<-as.character(pHcalib$tris.date)
+
+pHSlope<-pHcalib %>%
+  nest_by(tris.date)%>%
+  mutate(fitpH = list(lm(mVTris~TTris, data = pHcalib))) %>% # linear regression of mV and temp of the tris
+  summarise(broom::tidy(fitpH)) %>% # make the output tidy
+  select(tris.date, term, estimate) %>%
+  pivot_wider(names_from = term, values_from = estimate) %>%# put slope and intercept in their own column
+  left_join(daily, ., by="tris.date") %>% # join with the pH sample data
+  mutate(mVTris = temp.C*TTris + `(Intercept)`) %>%# calculate the mV of the tris at temperature in which the pH of the tanks were measured
+  mutate(pH = pH(Ex=pH.mV,Etris=mVTris,S=sal.psu.cor,T=temp.C)) # calculate pH of the tanks using the pH seacarb function
+
+```
+
+pH is now calculated as Total pH in the "pH" column. Now select the desired columns to analyze further.  
+
+```{r}
+daily_calc<-pHSlope%>%
+  select(date, time, tank, temp.C, pH, sal.psu.cor, flow.mL.5s, par)
+```
+
+## Calculate flow  
+
+Calculate flow to total mL per minute rather than 5 sec.  
+```{r}
+daily_calc<-daily_calc%>%
+  mutate(flow.L.min=(flow.mL.5s*12)/1000)%>%
+  select(!flow.mL.5s)
+```
+
+## Change to long format
+
+Change data format to long format 
+```{r}
+daily_calc.long <-daily_calc %>% pivot_longer(cols=temp.C:flow.L.min,
+  names_to = "metric",
+  values_to = "value")
+```
+
+Add in treatment information.  
+```{r}
+daily_calc.long<-daily_calc.long%>%
+  mutate(treatment=ifelse(grepl('^A', tank), 'High', 'Ambient'))%>%
+  mutate(treatment=ifelse(grepl('^P', tank), 'Parent', treatment))
+```
+
+## Plot metrics of interest  
+
+Plot by tank colored by temperature treatment.      
+```{r}
+daily_tanks<-daily_calc.long %>%
+  ggplot(aes(x=date, y=value, colour=treatment))+
+  geom_point(size=2)+
+  geom_vline(xintercept = as.numeric(ymd("2022-10-19")), linetype="dashed", 
+                color = "black", size=0.5)+
+  geom_vline(xintercept = as.numeric(ymd("2022-10-24")), linetype="solid", 
+                color = "black", size=0.5)+
+  scale_colour_manual(values=c("blue", "red", "gray"))+
+  xlab("Date")+
+  facet_grid(metric ~ ., scales = "free")+
+  scale_fill_brewer(palette = "Dark2")+
+  theme_bw(); daily_tanks
+  
+ggsave(filename="figures/environmental/tank_daily_measurements.png", plot=daily_tanks, dpi=300, width=6, height=8, units="in")
+
+```
+
+Plot by treatment summarizing tanks within each treatment.    
+```{r}
+daily_treatment<-daily_calc.long %>%
+  ggplot(aes(x=date, y=value, colour=treatment, group=interaction(treatment, date)))+
+  geom_point()+
+  geom_boxplot()+
+  geom_vline(xintercept = as.numeric(ymd("2022-10-19")), linetype="dashed", 
+                color = "black", size=0.5)+
+  geom_vline(xintercept = as.numeric(ymd("2022-10-24")), linetype="solid", 
+                color = "black", size=0.5)+
+  scale_colour_manual(values=c("blue", "red", "gray"))+
+  xlab("Date")+
+  facet_grid(metric ~ ., scales = "free")+
+  scale_fill_brewer(palette = "Dark2")+
+  theme_bw(); daily_treatment
+
+ggsave(filename="figures/environmental/treatment_daily_measurements.png", plot=daily_treatment, dpi=300, width=6, height=8, units="in")
+```
+
+## Test for differences between tanks  
+
+Obtain a short format dataset.  
+```{r}
+daily_calc.short<-daily_calc.long%>%
+  spread(metric, value)
+```
+
+Test for differences between metrics in High tanks during the exposure period.  
+```{r}
+daily_calc.short%>%
+  filter(treatment=="High")%>%
+  filter(date>"2022-10-23")%>%
+  aov(temp.C~tank, data=.)%>%
+  summary()
+#no difference 
+
+daily_calc.short%>%
+  filter(treatment=="High")%>%
+  filter(date>"2022-10-23")%>%
+  aov(pH~tank, data=.)%>%
+  summary()
+#no difference 
+
+daily_calc.short%>%
+  filter(treatment=="High")%>%
+  filter(date>"2022-10-23")%>%
+  aov(sal.psu.cor~tank, data=.)%>%
+  summary()
+#no difference 
+
+daily_calc.short%>%
+  filter(treatment=="High")%>%
+  filter(date>"2022-10-23")%>%
+  aov(par~tank, data=.)%>%
+  summary()
+#no difference
+
+daily_calc.short%>%
+  filter(treatment=="High")%>%
+  filter(date>"2022-10-23")%>%
+  aov(flow.L.min~tank, data=.)%>%
+  summary()
+#no difference 
+```
+
+There is no difference between tanks within the high temperature treatment.  
+
+Test for differences in ambient tanks during the exposure period.  
+```{r}
+daily_calc.short%>%
+  filter(treatment=="Ambient")%>%
+  filter(date>"2022-10-23")%>%
+  aov(temp.C~tank, data=.)%>%
+  summary()
+#no difference 
+
+daily_calc.short%>%
+  filter(treatment=="Ambient")%>%
+  filter(date>"2022-10-23")%>%
+  aov(pH~tank, data=.)%>%
+  summary()
+#no difference 
+
+daily_calc.short%>%
+  filter(treatment=="Ambient")%>%
+  filter(date>"2022-10-23")%>%
+  aov(sal.psu.cor~tank, data=.)%>%
+  summary()
+#no difference 
+
+daily_calc.short%>%
+  filter(treatment=="Ambient")%>%
+  filter(date>"2022-10-23")%>%
+  aov(par~tank, data=.)%>%
+  summary()
+#no difference
+
+daily_calc.short%>%
+  filter(treatment=="Ambient")%>%
+  filter(date>"2022-10-23")%>%
+  aov(flow.L.min~tank, data=.)%>%
+  summary()
+#no difference 
+```
+
+## Test for differences between treatments  
+```{r}
+daily_calc.short%>%
+  filter(!treatment=="Parent")%>%
+  filter(date>"2022-10-23")%>%
+  aov(temp.C~treatment, data=.)%>%
+  summary()
+#temperature is different between treatments
+
+daily_calc.short%>%
+  filter(!treatment=="Parent")%>%
+  filter(date>"2022-10-23")%>%
+  aov(pH~treatment, data=.)%>%
+  summary()
+#pH is different between treatments
+
+daily_calc.short%>%
+  filter(!treatment=="Parent")%>%
+  filter(date>"2022-10-23")%>%
+  aov(flow.L.min~treatment, data=.)%>%
+  summary()
+#flow is not different
+
+daily_calc.short%>%
+  filter(!treatment=="Parent")%>%
+  filter(date>"2022-10-23")%>%
+  aov(par~treatment, data=.)%>%
+  summary()
+#light is not different
+
+daily_calc.short%>%
+  filter(!treatment=="Parent")%>%
+  filter(date>"2022-10-23")%>%
+  aov(sal.psu.cor~treatment, data=.)%>%
+  summary()
+#salinity is not different 
+```
+
+View mean difference in pH between treatments.  
+```{r}
+daily_calc.short%>%
+  filter(date>"2022-10-23")%>%
+  group_by(treatment)%>%
+  summarise(mean=mean(pH, na.rm=TRUE))
+```
+pH is 0.04 units lower in the high temperature treatment than the ambient treatment.  
+
+View mean difference in temperature between treatments.  
+```{r}
+daily_calc.short%>%
+  filter(date>"2022-10-23")%>%
+  group_by(treatment)%>%
+  summarise(mean=mean(temp.C, na.rm=TRUE))
+```
+Temperature is 2.4° higher in the high temperature treatment than the ambient temperature values, which was the target difference.    
+
+## Summarize daily measurements  
+
+Add a time period for spawning, embryo rearing, and larval exposure.  
+
+```{r}
+daily_calc.short<-daily_calc.short%>%
+  mutate(period=ifelse(date>"2022-10-23", 'Exposure', 'Embryo Rearing'))%>%
+  mutate(period=ifelse(date<"2022-10-19", 'Spawning', period))
+
+daily_calc.short$period<-factor(daily_calc.short$period, levels=c("Spawning", "Embryo Rearing", "Exposure"))
+```
+
+Calculate descriptive statistics   
+```{r}
+daily_calc.short%>%
+  group_by(period, treatment)%>%
+  select(!tank)%>%
+  select(!date)%>%
+  select(!time)%>%
+  summarise(across(everything(), list(mean = mean, sd = sd), na.rm = TRUE))
+
+```
+
+# Logger analysis    
+
+## Read in files  
+
+Read in Hobo Pendant files  
+```{r}
+pendant.files <- list.files(path="data/environmental/loggers/", pattern="*.xlsx", full.names=TRUE)
+
+pendants <- setNames(pendant.files, pendant.files) %>%
+   map_dfr(read_excel, .id = "logger") %>%
+   rename(DateTime=`Date-Time (French Polynesia Standard Time)`, temp.C=`Ch: 1 - Temperature   (°C )`, light.lux=`Ch: 2 - Light   (lux)`)%>%
+  select(!`#`)%>%
+  mutate(logger=sub(".*/", "", logger))%>% #remove the path name
+  mutate(logger=sub("_.*", "", logger)) #keep only the serial number 
+
+pendants$DateTime<-as.POSIXct(pendants$DateTime, format="%m/%d/%y %H:%M:%S", tz="Pacific/Tahiti")
+
+#adjust time to correct values and force time zone
+pendants$DateTime <- force_tz(pendants$DateTime, tzone = "Pacific/Tahiti")
+```
+
+List the logger serial numbers in this dataframe.  
+```{r}
+levels(as.factor(pendants$logger))
+```
+21002974
+21002979
+21002981
+21002982
+21335980
+21335987
+
+## Read in treatment information  
+
+Read in metadata that assigns a pendant serial number to a tank number and/or treatment.  
+```{r}
+metadata<-read_csv("data/environmental/loggers/logger_metadata_larvae.csv")
+metadata$logger<-as.character(metadata$logger)
+```
+
+Assign treatment information to logger data.  
+```{r}
+pendants<-left_join(pendants, metadata, by="logger")
+pendants$tank<-as.factor(pendants$tank)
+```
+
+## Apply tempreature calibrations  
+
+Read in calibration output file with the intercept and coefficients for calibration. This calibration file is generated by the E5 project here https://github.com/urol-e5/apulchra_metabolism. The output files can be found here https://github.com/urol-e5/apulchra_metabolism/tree/main/output/environmental.  
+```{r}
+temp_cal<-read_csv("https://raw.githubusercontent.com/urol-e5/apulchra_metabolism/main/output/environmental/temperature_logger_calibrations.csv")
+temp_cal$logger<-as.character(temp_cal$logger)
+```
+
+Generate a calibrated temperature column in our logger dataframe.  
+```{r}
+pendants<-left_join(pendants, temp_cal, by="logger")
+
+pendants<-pendants%>%
+  mutate(temp.calibrated=temp.C*coef+intercept)%>%
+  select(!coef)%>%
+  select(!intercept)
+```
+
+## Apply light calibrations  
+
+Read in calibration output file with the intercept and coefficients for calibration that was calculated as an offset to the mean Lux value from all pendant loggers.    
+```{r}
+light_cal<-read_csv("https://raw.githubusercontent.com/urol-e5/apulchra_metabolism/main/output/environmental/light_logger_calibrations.csv")
+light_cal$logger<-as.character(light_cal$logger)
+```
+
+Apply calibration values.  
+```{r}
+pendants<-left_join(pendants, light_cal, by="logger")
+
+pendants<-pendants%>%
+  mutate(lux.calibrated=light.lux*coef+intercept)%>%
+  select(!coef)%>%
+  select(!intercept)
+```
+
+Apply a lux to PPFD (µmol m-2 s-1) conversion factor (0.0185) as provided by Apogee for sunlight. https://www.apogeeinstruments.com/conversion-ppfd-to-lux/ 
+```{r}
+pendants$par<-pendants$lux.calibrated*0.0185
+```
+
+## Plot temperature    
+
+Plot raw data over time by tank colored by treatment.   
+```{r}
+temp_plot<-pendants%>%
+  
+  ggplot(aes(x=DateTime, y=temp.calibrated, colour=tank))+
+  geom_line()+
+  scale_colour_manual(values=c("red", "red", "red", "blue", "blue", "blue"))+
+    geom_vline(xintercept = as.POSIXct("2022-10-19"), linetype="dashed", 
+                color = "black", size=0.5)+
+  geom_vline(xintercept = as.POSIXct("2022-10-24"), linetype="solid", 
+                color = "black", size=0.5)+
+  theme_classic(); temp_plot
+```
+
+Remove temperature data from logger read outs and tank cleaning.  
+
+
+
+ADD PLOTS FOR DAILY FLUCTUATIONS 
+REMOVE LOW VALUES DURING READ OUT 
+
+
+
+
+
+
+
+## Plot light     
+
+Plot over time by tank in par units  
+```{r}
+light_plot<-pendants%>%
+  ggplot(aes(x=DateTime, y=par, colour=tank))+
+  ylab("PAR (umol m2 s)")+
+  scale_colour_manual(values=c("red", "red", "red", "blue", "blue", "blue"))+
+  geom_vline(xintercept = as.POSIXct("2022-10-19"), linetype="dashed", 
+                color = "black", size=0.5)+
+  geom_vline(xintercept = as.POSIXct("2022-10-24"), linetype="solid", 
+                color = "black", size=0.5)+
+  geom_line()+
+  theme_classic(); light_plot
+```
+
+Max daily PAR was ~150-250 in larval tanks.  
+
+Plot by lux
+```{r}
+lux_plot<-pendants%>%
+  ggplot(aes(x=DateTime, y=lux.calibrated, colour=tank))+
+  ylab("Light (lux)")+
+    scale_colour_manual(values=c("red", "red", "red", "blue", "blue", "blue"))+
+    geom_vline(xintercept = as.numeric(as.POSIXct("2022-10-19")), linetype="dashed", 
+                color = "black", size=0.5)+
+  geom_vline(xintercept = as.numeric(as.POSIXct("2022-10-24")), linetype="solid", 
+                color = "black", size=0.5)+
+  geom_line()+
+  theme_classic(); lux_plot
+```
+
+
+ADD CODE TO SAVE FILES OF INTEREST 
+ADD LIGHT OVER COURSE OF DAILY FLUCTUATION 

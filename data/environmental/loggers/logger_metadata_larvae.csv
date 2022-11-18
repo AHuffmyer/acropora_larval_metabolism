@@ -1,7 +1,7 @@
-logger,date,tank,temperature,symbiont,treatment 
-21002974,,A5,ambient,,
-21002979,,A3,ambient,,
-21002981,,B2,ambient,,
-21002982,,A1,ambient,,
-21335980,,B4,ambient,,
-21335987,,B6,ambient,,
+logger,tank,treatment
+21002974,A5,High
+21002979,A3,High
+21002981,B2,Ambient
+21002982,A1,High
+21335980,B4,Ambient
+21335987,B6,Ambient

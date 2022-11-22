@@ -320,13 +320,14 @@ daily_calc.short$period<-factor(daily_calc.short$period, levels=c("Spawning", "E
 
 Calculate descriptive statistics   
 ```{r}
-daily_calc.short%>%
+summary<-daily_calc.short%>%
   group_by(period, treatment)%>%
   select(!tank)%>%
   select(!date)%>%
   select(!time)%>%
-  summarise(across(everything(), list(mean = mean, sd = sd), na.rm = TRUE))
+  summarise(across(everything(), list(mean = mean, sd = sd), na.rm = TRUE)); summary
 
+write_csv(summary, "output/environmental/daily_measurements_summary.csv")
 ```
 
 # Logger analysis    

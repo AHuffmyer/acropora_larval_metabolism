@@ -96,15 +96,6 @@ boxplot(PRdata$GP.nmol.org.min)
 #boxplot(PRdata$GP.nmol.org.min)
 ```
 
-No apparent outliers in the data.  
-
-Remove runs 9, 10, 11, 12. 
-
-```{r}
-#remove<-c("9", "10", "11", "12")
-#PRdata<-PRdata%>%
-  #filter(!Run %in% remove)
-```
 
 # **Plotting**  
 
@@ -163,9 +154,44 @@ r_plot<-PRdata %>%
 #ggsave("Mcap2021/Figures/Respiration/Respiration.png", r_plot, dpi=300, w=5, h=5, units="in")
 ```
 
-Plot data as an interaction plot   
+
+Remove runs 9, 10, 11, 12. 
+
 ```{r}
-r_plot<-PRdata %>%
+remove<-c("9", "10", "11", "12")
+PRdata_filter<-PRdata%>%
+  filter(!Run %in% remove)
+```
+
+Plot data by Run as boxplot  
+```{r}
+r_plot<-PRdata_filter %>%
+    group_by(Meas.Temp, Treatment.Temp, Run)%>%
+    
+    ggplot(., aes(x = as.factor(Run), y = abs(R.nmol.org.min), group=interaction(Meas.Temp))) +
+    geom_hline(yintercept=0, linetype="dashed", color="black", size=0.75)+
+    geom_boxplot(aes(group=interaction(Meas.Temp, Run), colour=Meas.Temp), position = position_dodge(0.8)) + 
+    geom_point(aes(fill=Meas.Temp, colour=Meas.Temp), size=3, position = position_dodge(0.8)) +
+    xlab("Run Number") + 
+    #scale_fill_manual(name="Rearing Treatment", values=c("blue","red"))+
+    #scale_color_manual(name="Rearing Treatment", values=c("blue","red"))+
+    ylab(expression(bold(paste("R (nmol ", O[2], " larva"^-1, "min"^-1, ")")))) +
+    #ylim(0, 0.05)+
+    theme_classic() + 
+    theme(
+      legend.position="right",
+      axis.title=element_text(face="bold", size=16),
+      axis.text=element_text(size=12, color="black"), 
+      legend.title=element_text(face="bold", size=14), 
+      legend.text=element_text(size=12)
+      ); r_plot
+
+#ggsave("Mcap2021/Figures/Respiration/Respiration.png", r_plot, dpi=300, w=5, h=5, units="in")
+```
+
+Plot treatment information.   
+```{r}
+r_plot<-PRdata_filter %>%
     group_by(Meas.Temp, Treatment.Temp, Days.Exposure)%>%
     dplyr::summarise(mean=mean(abs(R.nmol.org.min)), sd=sd(abs(R.nmol.org.min)), N=length(R.nmol.org.min), se=sd/sqrt(N))%>%
     
@@ -190,13 +216,12 @@ r_plot<-PRdata %>%
 #ggsave("Mcap2021/Figures/Respiration/Respiration.png", r_plot, dpi=300, w=5, h=5, units="in")
 ```
 
-
-After run 8 things get weird - higher values and more variable in runs 9-12 and 13-16???
+Runs 1-8 are very consistent. Runs 9-16 are highly variable and are gerater in value. Oddly, runs 8-12 were on the same day and same treatment groups as runs 5-8, indicating some sort of software or hardware issue that occurred. It is unclear if we can use this data. 
 
 
 ## Photosynthesis (Net)  
 
-Plot data as an interaction plot  
+Plot data with all runs  
 ```{r}
 p_plot<-PRdata %>%
     group_by(Meas.Temp, Treatment.Temp, Days.Exposure)%>%
@@ -221,52 +246,32 @@ p_plot<-PRdata %>%
       ); p_plot
 ```
 
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-## Generate final figure  
-
+Plot data with runs 9-12 removed.    
 ```{r}
-full_fig<-plot_grid(r_plot, p_plot, gp_plot, pr_plot, ncol=4, nrow=1, rel_heights= c(1,1,1,1), rel_widths = c(1,1,1,1.4), label_y=1, align="h", labels=c("A", "B", "C", "D"), label_size=18)
-
-ggsave(filename="Mcap2021/Figures/Respiration/respirometry_fig.png", plot=full_fig, dpi=500, width=18, height=6, units="in")
+p_plot<-PRdata_filter %>%
+    group_by(Meas.Temp, Treatment.Temp, Days.Exposure)%>%
+    dplyr::summarise(mean=mean(P.nmol.org.min), sd=sd(P.nmol.org.min), N=length(P.nmol.org.min), se=sd/sqrt(N))%>%
+    
+    ggplot(., aes(x = as.factor(Days.Exposure), y = mean, group=interaction(Meas.Temp, Treatment.Temp))) +
+    geom_hline(yintercept=0, linetype="dashed", color="black", size=0.75)+
+    geom_point(aes(fill=Meas.Temp, group=interaction(Treatment.Temp, Meas.Temp), shape=Treatment.Temp, colour=Meas.Temp), size=6, position = position_dodge(0.2)) + 
+    geom_errorbar(aes(ymin=mean-se, ymax=mean+se, group=interaction(Treatment.Temp, Meas.Temp)), width=0, linetype="solid", position=position_dodge(0.2), size=1.3, color="black")+
+    xlab("Days Exposure") + 
+    #scale_fill_manual(name="Rearing Treatment", values=c("blue","red"))+
+    #scale_color_manual(name="Rearing Treatment", values=c("blue","red"))+
+    ylab(expression(bold(paste("Net P (nmol ", O[2], " larva"^-1, "min"^-1, ")")))) +
+    #ylim(0, 0.05)+
+    theme_classic() + 
+    theme(
+      legend.position="right",
+      axis.title=element_text(face="bold", size=16),
+      axis.text=element_text(size=12, color="black"), 
+      legend.title=element_text(face="bold", size=14), 
+      legend.text=element_text(size=12)
+      ); p_plot
 ```
 
-```{r}
-full_fig_box<-plot_grid(r_plot_2, p_plot_2, gp_plot_2, pr_plot_2, ncol=4, nrow=1, rel_heights= c(1,1,1,1), rel_widths = c(1,1,1,1.4), label_y=1, align="h")
-
-ggsave(filename="Mcap2021/Figures/Respiration/respirometry_fig_box.png", plot=full_fig_box, dpi=500, width=18, height=6, units="in")
-```
+Photosynthesis is not positive, therefore we are only recording respiration. This makes sense as there were no symbionts in the larvae.  
 
 # **Analyze data**    
 
@@ -274,118 +279,16 @@ ggsave(filename="Mcap2021/Figures/Respiration/respirometry_fig_box.png", plot=fu
 
 Build linear mixed effect model and examine for Respiration.      
 ```{r, results=TRUE, warning=FALSE, message=FALSE}
-Rmodel1<-lmer(R.nmol.org.min~Treatment*Temperature + (1|Run) + (1|Tank), data=PRdata) #run as random
+Rmodel1<-lmer(log(1+R.nmol.org.min)~Meas.Temp*Treatment.Temp*Symbiont*Days.Exposure + (1|Run) + (1|Tank), data=PRdata_filter) #run as random
 anova(Rmodel1, type="II") 
 summary(Rmodel1)
 ```
-
-Run only as regular ANOVA.  
-```{r}
-summary(aov(R.nmol.org.min~Treatment*Temperature, data=PRdata))
-```
-Same results.  
 
 Check assumptions of model for residual normality and variance. Passes assumptions.    
 
 ```{r, results=TRUE, warning=FALSE, message=FALSE}
 qqPlot(residuals(Rmodel1))
-leveneTest(residuals(Rmodel1)~Treatment*Temperature, data=PRdata)
-```
-
-Conduct post hoc test.  
-
-```{r}
-emm<-emmeans(Rmodel1, ~Treatment*Temperature)
-cld(emm)
-```
-
-
-## Net Photosynthesis   
-
-Build linear mixed effect model and examine for Photosynthesis       
-```{r, results=TRUE, warning=FALSE, message=FALSE}
-Pmodel1<-lmer(P.nmol.org.min~Treatment*Temperature + (1|Run) + (1|Tank), data=PRdata) #run nested within day
-anova(Pmodel1, type="II")
-summary(Pmodel1)
-```
-
-Run only as regular ANOVA.  
-```{r}
-summary(aov(P.nmol.org.min~Treatment*Temperature, data=PRdata))
-```
-In this analysis, treatment is significant.  
-
-Check assumptions of model for residual normality and variance. Violates variance assumption, return to this.    
-
-```{r, results=TRUE, warning=FALSE, message=FALSE}
-qqPlot(residuals(Pmodel1))
-leveneTest(residuals(Pmodel1)~Treatment*Temperature, data=PRdata)
-```
-
-Conduct post hoc test.  
-
-```{r}
-emm<-emmeans(Pmodel1, ~Treatment*Temperature)
-cld(emm)
-```
- 
-
-## Gross Photosynthesis  
-
-Build linear mixed effect model and examine for GP       
-```{r, results=TRUE, warning=FALSE, message=FALSE}
-GPmodel1<-lmer(GP.nmol.org.min~Treatment*Temperature + (1|Run) + (1|Tank), data=PRdata) #run nested within day
-anova(GPmodel1, type="II")
-summary(GPmodel1)
-```
-
-Run only as regular ANOVA.  
-```{r}
-summary(aov(GP.nmol.org.min~Treatment*Temperature, data=PRdata))
-```
-Same results.    
-
-Check assumptions of model for residual normality and variance. Passes.    
-
-```{r, results=TRUE, warning=FALSE, message=FALSE}
-qqPlot(residuals(GPmodel1))
-leveneTest(residuals(GPmodel1)~Treatment*Temperature, data=PRdata)
-```
-
-Conduct post hoc test.  
-
-```{r}
-emm<-emmeans(GPmodel1, ~Treatment*Temperature)
-cld(emm)
-```
-
-## P:R    
- 
-Build linear mixed effect model and examine for PR ratio       
-```{r, results=TRUE, warning=FALSE, message=FALSE}
-PRmodel1<-lmer(ratio~Treatment*Temperature + (1|Run) + (1|Tank), data=PRdata) #run as random
-anova(PRmodel1, type="II")
-summary(PRmodel1)
-```
-
-Run only as regular ANOVA.  
-```{r}
-summary(aov(ratio~Treatment*Temperature, data=PRdata))
-```
-Same results.   
-
-Check assumptions of model for residual normality and variance. Meets assumptions.  
-
-```{r, results=TRUE, warning=FALSE, message=FALSE}
-qqPlot(residuals(PRmodel1))
-leveneTest(residuals(PRmodel1)~Treatment*Temperature, data=PRdata)
-```
-
-Conduct post hoc test.  
-
-```{r}
-emm<-emmeans(PRmodel1, ~Treatment*Temperature)
-cld(emm)
+leveneTest(residuals(Rmodel1)~Meas.Temp*Treatment.Temp*Symbiont*Days.Exposure, data=PRdata)
 ```
 
 ### Generate summary tables of mean and SE for all variables  
@@ -393,18 +296,12 @@ cld(emm)
 Generate summary of all respiration data.  
 
 ```{r}
-summary<-PRdata%>%
-  group_by(Temperature, Treatment)%>%
+summary<-PRdata_filter%>%
+  group_by(Meas.Temp, Treatment.Temp, Symbiont, Days.Exposure)%>%
   summarise(N=length(R.nmol.org.min),
             Mean_R=mean(R.nmol.org.min), 
-            SE_R=sd(R.nmol.org.min)/sqrt(length(R.nmol.org.min)),
-            Mean_P=mean(P.nmol.org.min), 
-            SE_P=sd(P.nmol.org.min)/sqrt(length(P.nmol.org.min)),
-            Mean_GP=mean(GP.nmol.org.min), 
-            SE_GP=sd(GP.nmol.org.min)/sqrt(length(GP.nmol.org.min)),
-            Mean_PR=mean(ratio), 
-            SE_PR=sd(ratio)/sqrt(length(ratio)))
+            SE_R=sd(R.nmol.org.min)/sqrt(length(R.nmol.org.min))); summary
 
-summary%>%
-  write_csv(., "Mcap2021/Output/Respiration/mean_respiration.csv")
+#summary%>%
+  #write_csv(., "Mcap2021/Output/Respiration/mean_respiration.csv")
 ```

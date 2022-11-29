@@ -13,6 +13,7 @@ output:
 editor_options: 
   chunk_output_type: console
 ---
+
 ## Setup  
 
 Set up workspace, set options, and load required packages.    
@@ -141,6 +142,8 @@ Issues as of 28 Nov:
 
 
 Filter out 9, 10 11, and 12? 
+
+Try running respo rates across entire frame of measurements (light + dark) to see how that compares 
 
 Save respiration data frames.  
 

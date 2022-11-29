@@ -43,3 +43,7 @@ vignettes/*.pdf
 ._.DS_Store
 **/.DS_Store
 **/._.DS_Store
+
+#respirometry plots 
+output/respirometry/RespirationPlots/
+output/respirometry/PhotosynthesisPlots/

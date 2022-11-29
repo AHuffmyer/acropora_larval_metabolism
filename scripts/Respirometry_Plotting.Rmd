@@ -125,7 +125,7 @@ r_plot<-PRdata %>%
       legend.text=element_text(size=12)
       ); r_plot
 
-#ggsave("Mcap2021/Figures/Respiration/Respiration.png", r_plot, dpi=300, w=5, h=5, units="in")
+ggsave("figures/respirometry/resp_all_runs_treatment.png", r_plot, dpi=300, w=7, h=5, units="in")
 ```
 
 Plot data by Run as boxplot  
@@ -151,7 +151,7 @@ r_plot<-PRdata %>%
       legend.text=element_text(size=12)
       ); r_plot
 
-#ggsave("Mcap2021/Figures/Respiration/Respiration.png", r_plot, dpi=300, w=5, h=5, units="in")
+ggsave("figures/respirometry/resp_all_runs_boxplot.png", r_plot, dpi=300, w=7, h=5, units="in")
 ```
 
 
@@ -186,7 +186,7 @@ r_plot<-PRdata_filter %>%
       legend.text=element_text(size=12)
       ); r_plot
 
-#ggsave("Mcap2021/Figures/Respiration/Respiration.png", r_plot, dpi=300, w=5, h=5, units="in")
+ggsave("figures/respirometry/resp_filtered_runs_boxplot.png", r_plot, dpi=300, w=7, h=5, units="in")
 ```
 
 Plot treatment information.   
@@ -213,7 +213,7 @@ r_plot<-PRdata_filter %>%
       legend.text=element_text(size=12)
       ); r_plot
 
-#ggsave("Mcap2021/Figures/Respiration/Respiration.png", r_plot, dpi=300, w=5, h=5, units="in")
+ggsave("figures/respirometry/resp_filtered_runs_treatment.png", r_plot, dpi=300, w=7, h=5, units="in")
 ```
 
 Runs 1-8 are very consistent. Runs 9-16 are highly variable and are gerater in value. Oddly, runs 8-12 were on the same day and same treatment groups as runs 5-8, indicating some sort of software or hardware issue that occurred. It is unclear if we can use this data. 
@@ -225,9 +225,9 @@ Plot data with all runs
 ```{r}
 p_plot<-PRdata %>%
     group_by(Meas.Temp, Treatment.Temp, Days.Exposure)%>%
-    dplyr::summarise(mean=mean(abs(P.nmol.org.min)), sd=sd(abs(P.nmol.org.min)), N=length(P.nmol.org.min), se=sd/sqrt(N))%>%
+    dplyr::summarise(mean=mean(P.nmol.org.min), sd=sd(P.nmol.org.min), N=length(P.nmol.org.min), se=sd/sqrt(N))%>%
     
-    ggplot(., aes(x = as.factor(Days.Exposure), y = abs(mean), group=interaction(Meas.Temp, Treatment.Temp))) +
+    ggplot(., aes(x = as.factor(Days.Exposure), y = mean, group=interaction(Meas.Temp, Treatment.Temp))) +
     geom_hline(yintercept=0, linetype="dashed", color="black", size=0.75)+
     geom_point(aes(fill=Meas.Temp, group=interaction(Treatment.Temp, Meas.Temp), shape=Treatment.Temp, colour=Meas.Temp), size=6, position = position_dodge(0.2)) + 
     geom_errorbar(aes(ymin=mean-se, ymax=mean+se, group=interaction(Treatment.Temp, Meas.Temp)), width=0, linetype="solid", position=position_dodge(0.2), size=1.3, color="black")+
@@ -244,6 +244,8 @@ p_plot<-PRdata %>%
       legend.title=element_text(face="bold", size=14), 
       legend.text=element_text(size=12)
       ); p_plot
+
+ggsave("figures/respirometry/photo_all_runs_treatment.png", p_plot, dpi=300, w=7, h=5, units="in")
 ```
 
 Plot data with runs 9-12 removed.    
@@ -269,6 +271,8 @@ p_plot<-PRdata_filter %>%
       legend.title=element_text(face="bold", size=14), 
       legend.text=element_text(size=12)
       ); p_plot
+
+ggsave("figures/respirometry/photo_filtered_runs_treatment.png", p_plot, dpi=300, w=7, h=5, units="in")
 ```
 
 Photosynthesis is not positive, therefore we are only recording respiration. This makes sense as there were no symbionts in the larvae.  

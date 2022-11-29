@@ -1,7 +1,7 @@
 ---
 title: Respirometry Plotting and Analysis  
 author: "AS Huffmyer"
-date: '2021'
+date: '2022'
 output:
   html_document:
     code_folding: hide
@@ -13,7 +13,7 @@ output:
 editor_options: 
   chunk_output_type: console
 ---
-This script analyzes and plots data for Symbiotic Integration 2021 respirometry data. 
+This script analyzes and plots data for Acropora pulchra larval metabolism 2022 respirometry data. 
 
 # **Setup**  
 
@@ -48,12 +48,11 @@ library('emmeans')
 library('multcomp')
 ```
 
-
 # **Data visualization and manipulation**  
 
 Load data from LoLinR.    
 ```{r, warning=FALSE, message=FALSE}
-PRdata<-read.csv("Mcap2021/Output/Respiration/oxygen_P_R_calc.csv") #load data
+PRdata<-read.csv("output/respirometry/oxygen_P_R_calc.csv") #load data
 ```
 
 Separate project specific data.  
@@ -62,8 +61,13 @@ Separate project specific data.
 PRdata<-PRdata[!is.na(PRdata$Type),]
 
 #format columns
-PRdata$Temperature<-as.factor(PRdata$Temperature)
-PRdata$Plate<-as.factor(PRdata$Plate)
+PRdata$Meas.Temp<-as.factor(PRdata$Meas.Temp)
+PRdata$Tank<-as.factor(PRdata$Tank)
+PRdata$Treatment.Temp<-as.factor(PRdata$Treatment.Temp)
+PRdata$Symbiont<-as.factor(PRdata$Symbiont)
+PRdata$Treatment.Code<-as.factor(PRdata$Treatment.Code)
+PRdata$Days.Exposure<-as.factor(PRdata$Days.Exposure)
+PRdata$SDR<-as.factor(PRdata$SDR)
 PRdata$Run<-as.factor(PRdata$Run)
 ```
 
@@ -94,33 +98,36 @@ boxplot(PRdata$GP.nmol.org.min)
 
 No apparent outliers in the data.  
 
+Remove runs 9, 10, 11, 12. 
+
+```{r}
+#remove<-c("9", "10", "11", "12")
+#PRdata<-PRdata%>%
+  #filter(!Run %in% remove)
+```
+
 # **Plotting**  
 
 ## Respiration  
 
-Plot data as an interaction plot   
+Plot data by Run   
 ```{r}
-
 r_plot<-PRdata %>%
-    group_by(Treatment, Temperature)%>%
+    group_by(Meas.Temp, Treatment.Temp, Run)%>%
     dplyr::summarise(mean=mean(abs(R.nmol.org.min)), sd=sd(abs(R.nmol.org.min)), N=length(R.nmol.org.min), se=sd/sqrt(N))%>%
-    ggplot(., aes(x = as.factor(Temperature), y = abs(mean), group=interaction(Treatment, Temperature))) +
+    
+    ggplot(., aes(x = as.factor(Run), y = abs(mean), group=interaction(Meas.Temp, Treatment.Temp))) +
     geom_hline(yintercept=0, linetype="dashed", color="black", size=0.75)+
-    geom_line(position=position_dodge(0.2), size=1.3, aes(color=Treatment, group=Treatment)) +
-    geom_point(aes(fill=Treatment, group=interaction(Treatment, Temperature)), pch = 21, size=6, position = position_dodge(0.2)) + 
-    geom_errorbar(aes(ymin=mean-se, ymax=mean+se, group=interaction(Treatment, Temperature)), width=0, linetype="solid", position=position_dodge(0.2), size=1.3, color="black")+
-    xlab("Temperature") + 
-    scale_fill_manual(name="Rearing Treatment", values=c("blue","red"))+
-    scale_color_manual(name="Rearing Treatment", values=c("blue","red"))+
+    geom_point(aes(fill=Meas.Temp, group=interaction(Treatment.Temp, Meas.Temp), shape=Treatment.Temp, colour=Meas.Temp), size=6, position = position_dodge(0.2)) + 
+    geom_errorbar(aes(ymin=mean-se, ymax=mean+se, group=interaction(Treatment.Temp, Meas.Temp)), width=0, linetype="solid", position=position_dodge(0.2), size=1.3, color="black")+
+    xlab("Run Number") + 
+    #scale_fill_manual(name="Rearing Treatment", values=c("blue","red"))+
+    #scale_color_manual(name="Rearing Treatment", values=c("blue","red"))+
     ylab(expression(bold(paste("R (nmol ", O[2], " larva"^-1, "min"^-1, ")")))) +
-    #scale_y_continuous(limits=c(0.5, -0.005), labels = scales::number_format(accuracy = 0.01, decimal.mark = '.'))+
-    ylim(0, 0.05)+
-    geom_text(x=1.5, y=0.007, label="Treatment p=0.945", color="darkgray", size=6)+
-    geom_text(x=1.5, y=0.01, label="Temperature p=0.207", color="darkgray", size=6)+
-    geom_text(x=1.5, y=0.004, label="Interaction p=0.224", color="darkgray", size=6)+
+    #ylim(0, 0.05)+
     theme_classic() + 
     theme(
-      legend.position="none",
+      legend.position="right",
       axis.title=element_text(face="bold", size=16),
       axis.text=element_text(size=12, color="black"), 
       legend.title=element_text(face="bold", size=14), 
@@ -130,203 +137,121 @@ r_plot<-PRdata %>%
 #ggsave("Mcap2021/Figures/Respiration/Respiration.png", r_plot, dpi=300, w=5, h=5, units="in")
 ```
 
-Plot data as a box plot   
+Plot data by Run as boxplot  
 ```{r}
-
-r_plot_2<-PRdata %>%
-    group_by(Treatment, Temperature)%>%
-    ggplot(., aes(x = as.factor(Temperature), y = R.nmol.org.min, group=interaction(Treatment, Temperature))) +
+r_plot<-PRdata %>%
+    group_by(Meas.Temp, Treatment.Temp, Run)%>%
+    
+    ggplot(., aes(x = as.factor(Run), y = abs(R.nmol.org.min), group=interaction(Meas.Temp))) +
     geom_hline(yintercept=0, linetype="dashed", color="black", size=0.75)+
-    geom_boxplot(aes(color=Treatment, group=interaction(Treatment, Temperature)), outlier.size = 0, position = position_dodge(0.85), lwd=1) +
-    geom_point(aes(fill=Treatment, group=interaction(Treatment, Temperature)), pch = 21, size=4, position = position_jitterdodge(0.3)) + 
-    xlab("Temperature") + 
-    scale_fill_manual(name="Rearing Treatment", values=c("blue","red"))+
-    scale_color_manual(name="Rearing Treatment", values=c("blue","red"))+
+    geom_boxplot(aes(group=interaction(Meas.Temp, Run), colour=Meas.Temp), position = position_dodge(0.8)) + 
+    geom_point(aes(fill=Meas.Temp, colour=Meas.Temp), size=3, position = position_dodge(0.8)) +
+    xlab("Run Number") + 
+    #scale_fill_manual(name="Rearing Treatment", values=c("blue","red"))+
+    #scale_color_manual(name="Rearing Treatment", values=c("blue","red"))+
     ylab(expression(bold(paste("R (nmol ", O[2], " larva"^-1, "min"^-1, ")")))) +
-    #scale_y_continuous(limits=c(-0.03, 0.005), labels = scales::number_format(accuracy = 0.01, decimal.mark = '.'))+
+    #ylim(0, 0.05)+
     theme_classic() + 
     theme(
-      legend.position="none",
+      legend.position="right",
       axis.title=element_text(face="bold", size=16),
       axis.text=element_text(size=12, color="black"), 
       legend.title=element_text(face="bold", size=14), 
       legend.text=element_text(size=12)
-      ); r_plot_2
+      ); r_plot
 
-#ggsave("Mcap2021/Figures/Respiration/Respiration_box.png", r_plot_2, dpi=300, w=5, h=5, units="in")
+#ggsave("Mcap2021/Figures/Respiration/Respiration.png", r_plot, dpi=300, w=5, h=5, units="in")
 ```
+
+Plot data as an interaction plot   
+```{r}
+r_plot<-PRdata %>%
+    group_by(Meas.Temp, Treatment.Temp, Days.Exposure)%>%
+    dplyr::summarise(mean=mean(abs(R.nmol.org.min)), sd=sd(abs(R.nmol.org.min)), N=length(R.nmol.org.min), se=sd/sqrt(N))%>%
+    
+    ggplot(., aes(x = as.factor(Days.Exposure), y = abs(mean), group=interaction(Meas.Temp, Treatment.Temp))) +
+    geom_hline(yintercept=0, linetype="dashed", color="black", size=0.75)+
+    geom_point(aes(fill=Meas.Temp, group=interaction(Treatment.Temp, Meas.Temp), shape=Treatment.Temp, colour=Meas.Temp), size=6, position = position_dodge(0.2)) + 
+    geom_errorbar(aes(ymin=mean-se, ymax=mean+se, group=interaction(Treatment.Temp, Meas.Temp)), width=0, linetype="solid", position=position_dodge(0.2), size=1.3, color="black")+
+    xlab("Days Exposure") + 
+    #scale_fill_manual(name="Rearing Treatment", values=c("blue","red"))+
+    #scale_color_manual(name="Rearing Treatment", values=c("blue","red"))+
+    ylab(expression(bold(paste("R (nmol ", O[2], " larva"^-1, "min"^-1, ")")))) +
+    #ylim(0, 0.05)+
+    theme_classic() + 
+    theme(
+      legend.position="right",
+      axis.title=element_text(face="bold", size=16),
+      axis.text=element_text(size=12, color="black"), 
+      legend.title=element_text(face="bold", size=14), 
+      legend.text=element_text(size=12)
+      ); r_plot
+
+#ggsave("Mcap2021/Figures/Respiration/Respiration.png", r_plot, dpi=300, w=5, h=5, units="in")
+```
+
+
+After run 8 things get weird - higher values and more variable in runs 9-12 and 13-16???
+
 
 ## Photosynthesis (Net)  
 
 Plot data as an interaction plot  
 ```{r}
 p_plot<-PRdata %>%
-    dplyr::group_by(Treatment, Temperature)%>%
-    dplyr::summarise(mean=mean(P.nmol.org.min), sd=sd(P.nmol.org.min), N=length(P.nmol.org.min), se=sd/sqrt(N))%>%
-    ggplot(., aes(x = as.factor(Temperature), y = mean, group=interaction(Treatment, Temperature))) +
+    group_by(Meas.Temp, Treatment.Temp, Days.Exposure)%>%
+    dplyr::summarise(mean=mean(abs(P.nmol.org.min)), sd=sd(abs(P.nmol.org.min)), N=length(P.nmol.org.min), se=sd/sqrt(N))%>%
+    
+    ggplot(., aes(x = as.factor(Days.Exposure), y = abs(mean), group=interaction(Meas.Temp, Treatment.Temp))) +
     geom_hline(yintercept=0, linetype="dashed", color="black", size=0.75)+
-    geom_line(position=position_dodge(0.2), size=1.3, aes(color=Treatment, group=Treatment)) +
-    geom_point(aes(fill=Treatment, group=interaction(Treatment, Temperature)), pch = 21, size=6, position = position_dodge(0.2)) + 
-    geom_errorbar(aes(ymin=mean-se, ymax=mean+se, group=interaction(Treatment, Temperature)), width=0, linetype="solid", position=position_dodge(0.2), size=1.3, color="black")+
-    xlab("Temperature") + 
-    scale_fill_manual(name="Rearing Treatment", values=c("blue","red"))+
-    scale_color_manual(name="Rearing Treatment", values=c("blue","red"))+
+    geom_point(aes(fill=Meas.Temp, group=interaction(Treatment.Temp, Meas.Temp), shape=Treatment.Temp, colour=Meas.Temp), size=6, position = position_dodge(0.2)) + 
+    geom_errorbar(aes(ymin=mean-se, ymax=mean+se, group=interaction(Treatment.Temp, Meas.Temp)), width=0, linetype="solid", position=position_dodge(0.2), size=1.3, color="black")+
+    xlab("Days Exposure") + 
+    #scale_fill_manual(name="Rearing Treatment", values=c("blue","red"))+
+    #scale_color_manual(name="Rearing Treatment", values=c("blue","red"))+
     ylab(expression(bold(paste("Net P (nmol ", O[2], " larva"^-1, "min"^-1, ")")))) +
-    geom_text(x=1.5, y=0.007, label="Treatment p=0.035", color="black", size=6)+
-    geom_text(x=1.5, y=0.01, label="Temperature p=0.271", color="darkgray", size=6)+
-    geom_text(x=1.5, y=0.004, label="Interaction p=0.432", color="darkgray", size=6)+
-    ylim(0, 0.05) +
+    #ylim(0, 0.05)+
     theme_classic() + 
     theme(
-      legend.position="none",
+      legend.position="right",
       axis.title=element_text(face="bold", size=16),
       axis.text=element_text(size=12, color="black"), 
       legend.title=element_text(face="bold", size=14), 
       legend.text=element_text(size=12)
       ); p_plot
-
 ```
 
-Plot data as a box plot   
-```{r}
 
-p_plot_2<-PRdata %>%
-    group_by(Treatment, Temperature)%>%
-    ggplot(., aes(x = as.factor(Temperature), y = P.nmol.org.min, group=interaction(Treatment, Temperature))) +
-    geom_hline(yintercept=0, linetype="dashed", color="black", size=0.75)+
-    geom_boxplot(aes(color=Treatment, group=interaction(Treatment, Temperature)), outlier.size = 0, position = position_dodge(0.85), lwd=1) +
-    geom_point(aes(fill=Treatment, group=interaction(Treatment, Temperature)), pch = 21, size=4, position = position_jitterdodge(0.3)) + 
-    xlab("Temperature") + 
-    scale_fill_manual(name="Rearing Treatment", values=c("blue","red"))+
-    scale_color_manual(name="Rearing Treatment", values=c("blue","red"))+
-    ylab(expression(bold(paste("Net P (nmol ", O[2], " larva"^-1, "min"^-1, ")")))) +
-    #scale_y_continuous(limits=c(-0.03, 0.005), labels = scales::number_format(accuracy = 0.01, decimal.mark = '.'))+
-    theme_classic() + 
-    theme(
-      legend.position="none",
-      axis.title=element_text(face="bold", size=16),
-      axis.text=element_text(size=12, color="black"), 
-      legend.title=element_text(face="bold", size=14), 
-      legend.text=element_text(size=12)
-      ); p_plot_2
 
-#ggsave("Mcap2021/Figures/Respiration/NetPhotosynthesis_box.png", p_plot_2, dpi=300, w=5, h=5, units="in")
-```
 
-## Photosynthesis (Gross)  
 
-Plot data as an interaction plot   
-```{r}
-gp_plot<-PRdata %>%
-    dplyr::group_by(Treatment, Temperature)%>%
-    dplyr::summarise(mean=mean(GP.nmol.org.min), sd=sd(GP.nmol.org.min), N=length(GP.nmol.org.min), se=sd/sqrt(N))%>%
-    ggplot(., aes(x = as.factor(Temperature), y = mean, group=interaction(Treatment, Temperature))) +
-    geom_hline(yintercept=0, linetype="dashed", color="black", size=0.75)+
-    geom_line(position=position_dodge(0.2), size=1.3, aes(color=Treatment, group=Treatment)) +
-    geom_point(aes(fill=Treatment, group=interaction(Treatment, Temperature)), pch = 21, size=6, position = position_dodge(0.2)) + 
-    geom_errorbar(aes(ymin=mean-se, ymax=mean+se, group=interaction(Treatment, Temperature)), width=0, linetype="solid", position=position_dodge(0.2), size=1.3, color="black")+
-    xlab("Temperature") + 
-    scale_fill_manual(name="Rearing Treatment", values=c("blue","red"))+
-    scale_color_manual(name="Rearing Treatment", values=c("blue","red"))+
-    ylab(expression(bold(paste("Gross P (nmol ", O[2], " larva"^-1, "min"^-1, ")")))) +
-    ylim(0, 0.05) +
-    geom_text(x=1.5, y=0.007, label="Treatment p=0.226", color="darkgray", size=6)+
-    geom_text(x=1.5, y=0.01, label="Temperature p=0.143", color="darkgray", size=6)+
-    geom_text(x=1.5, y=0.004, label="Interaction p=0.207", color="darkgray", size=6)+
-    theme_classic() + 
-    theme(
-      legend.position="none",
-      axis.title=element_text(face="bold", size=16),
-      axis.text=element_text(size=12, color="black"), 
-      legend.title=element_text(face="bold", size=14), 
-      legend.text=element_text(size=12)
-      ); gp_plot
 
-```
 
-Plot data as a box plot   
-```{r}
 
-gp_plot_2<-PRdata %>%
-    group_by(Treatment, Temperature)%>%
-    ggplot(., aes(x = as.factor(Temperature), y = GP.nmol.org.min, group=interaction(Treatment, Temperature))) +
-    geom_hline(yintercept=0, linetype="dashed", color="black", size=0.75)+
-    geom_boxplot(aes(color=Treatment, group=interaction(Treatment, Temperature)), outlier.size = 0, position = position_dodge(0.85), lwd=1) +
-    geom_point(aes(fill=Treatment, group=interaction(Treatment, Temperature)), pch = 21, size=4, position = position_jitterdodge(0.3)) + 
-    xlab("Temperature") + 
-    scale_fill_manual(name="Rearing Treatment", values=c("blue","red"))+
-    scale_color_manual(name="Rearing Treatment", values=c("blue","red"))+
-    ylab(expression(bold(paste("Gross P (nmol ", O[2], " larva"^-1, "min"^-1, ")")))) +
-    #scale_y_continuous(limits=c(-0.03, 0.005), labels = scales::number_format(accuracy = 0.01, decimal.mark = '.'))+
-    theme_classic() + 
-    theme(
-      legend.position="none",
-      axis.title=element_text(face="bold", size=16),
-      axis.text=element_text(size=12, color="black"), 
-      legend.title=element_text(face="bold", size=14), 
-      legend.text=element_text(size=12)
-      ); gp_plot_2
 
-#ggsave("Mcap2021/Figures/Respiration/GrossPhotosynthesis_box.png", gp_plot_2, dpi=300, w=5, h=5, units="in")
-```
 
-## P:R Ratio  
 
-Plot data as an interaction plot     
-```{r}
-pr_plot<-PRdata %>%
-    dplyr::group_by(Treatment, Temperature)%>%
-    dplyr::summarise(mean=mean(ratio), sd=sd(ratio), N=length(ratio), se=sd/sqrt(N))%>%
-    ggplot(., aes(x = as.factor(Temperature), y = mean, group=interaction(Treatment, Temperature))) +
-    geom_hline(yintercept=1, linetype="dashed", color="black", size=0.75)+
-    geom_line(position=position_dodge(0.2), size=1.3, aes(color=Treatment, group=Treatment)) +
-    geom_point(aes(fill=Treatment, group=interaction(Treatment, Temperature)), pch = 21, size=6, position = position_dodge(0.2)) + 
-    geom_errorbar(aes(ymin=mean-se, ymax=mean+se, group=interaction(Treatment, Temperature)), width=0, linetype="solid", position=position_dodge(0.2), size=1.3, color="black")+
-    xlab("Temperature") + 
-    scale_fill_manual(name="Rearing Treatment", values=c("blue","red"))+
-    scale_color_manual(name="Rearing Treatment", values=c("blue","red"))+
-    ylab(expression(bold(paste("P:R")))) +
-    #scale_y_continuous(limits=c(0.8, 3), labels = scales::number_format(accuracy = 0.01, decimal.mark = '.'))+
-    ylim(1, 3) +
-    geom_text(x=1.5, y=1.28, label="Treatment p=0.051", color="darkgray", size=6)+
-    geom_text(x=1.5, y=1.4, label="Temperature p=0.540", color="darkgray", size=6)+
-    geom_text(x=1.5, y=1.15, label="Interaction p=0.525", color="darkgray", size=6)+
-    theme_classic() + 
-    theme(
-      legend.position="right",
-      axis.title=element_text(face="bold", size=16),
-      axis.text=element_text(size=12, color="black"), 
-      legend.title=element_text(face="bold", size=14), 
-      legend.text=element_text(size=14)
-      ); pr_plot
 
-```
 
-Plot data as a box plot   
-```{r}
 
-pr_plot_2<-PRdata %>%
-    group_by(Treatment, Temperature)%>%
-    ggplot(., aes(x = as.factor(Temperature), y = ratio, group=interaction(Treatment, Temperature))) +
-    geom_hline(yintercept=0, linetype="dashed", color="black", size=0.75)+
-    geom_boxplot(aes(color=Treatment, group=interaction(Treatment, Temperature)), outlier.size = 0, position = position_dodge(0.85), lwd=1) +
-    geom_point(aes(fill=Treatment, group=interaction(Treatment, Temperature)), pch = 21, size=4, position = position_jitterdodge(0.3)) + 
-    xlab("Temperature") + 
-    scale_fill_manual(name="Rearing Treatment", values=c("blue","red"))+
-    scale_color_manual(name="Rearing Treatment", values=c("blue","red"))+
-    ylab(expression(bold(paste("P:R")))) +
-    #scale_y_continuous(limits=c(-0.03, 0.005), labels = scales::number_format(accuracy = 0.01, decimal.mark = '.'))+
-    theme_classic() + 
-    theme(
-      legend.position="right",
-      axis.title=element_text(face="bold", size=16),
-      axis.text=element_text(size=12, color="black"), 
-      legend.title=element_text(face="bold", size=14), 
-      legend.text=element_text(size=12)
-      ); pr_plot_2
 
-#ggsave("Mcap2021/Figures/Respiration/PRratio_box.png", pr_plot_2, dpi=300, w=5, h=5, units="in")
-```
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
 
 
 ## Generate final figure  

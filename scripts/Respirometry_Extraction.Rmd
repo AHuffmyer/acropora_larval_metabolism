@@ -92,7 +92,7 @@ Load in the sample information file. It is important to have chambers in the ord
 Sample.Info<-read.csv("data/respirometry/Resp_Sample_Info.csv") #information on life stage, number of individuals, runs, etc.
 rename <- Sample.Info$Chamber.ID
 samp <- Sample.Info$Sample.ID
-run <- str_sub(file.names, 17, 20) #grab run from file name
+run <- str_sub(file.names, 17, 21) #grab run from file name
 date <- str_sub(file.names, 1, str_length(file.names)-24) #grab date from file name
 
 #load in respiration start times as a list the same length as the number of files
@@ -103,8 +103,6 @@ ptime<-starttimes$Ptime #for photosynthesis, filter as < than this time
 
 Run loop to extract slopes from respiration data. Subset for respiration data by filtering time >= respiration start time.  
 
-
-WHY DO WE SKIP 56 or 72?? 13 starts the data 
 ```{r, results=FALSE, warning=FALSE, message=FALSE}
 for(i in 1:length(file.names)) { # for every file in list start at the first and run this following function
   Resp.Data <-read.table(file.path(path.p,file.names[i]), skip = 56, header=T, sep=",", na.string="NA", fill = TRUE, as.is=TRUE, fileEncoding="latin1") #reads in the data files
@@ -135,26 +133,21 @@ for(i in 1:length(file.names)) { # for every file in list start at the first and
 
 ```
 
+Issues as of 28 Nov: 
+- Run 9 and 10 short time frame, check run times 
+- Run 7 D6 slope at end not representative 
+- Run 8 B4 slope at end not representative 
+- Run 8 B5 slope at end not representative 
 
 
-
-
-
-
-
-
-
-
-
-
-
+Filter out 9, 10 11, and 12? 
 
 Save respiration data frames.  
 
 ```{r, results=FALSE, warning=FALSE, message=FALSE}
 Resp.R <- Resp.R[-1,] #remove empty column
 
-write.csv(Resp.R, paste0("output/respirometry/Respiration_rates.csv", sep=",")) #save respiration rate data
+write.csv(Resp.R, paste0("output/respirometry/Respiration_rates.csv")) #save respiration rate data
 ```
 
 ```{r, warning=FALSE, message=FALSE}
@@ -167,7 +160,6 @@ Resp.Rates<-Resp.Rates %>%
 Resp.Rates$Run<-as.integer(Resp.Rates$Run) #format as # rather than run #, set as integer
 ```
 
-
 ## Photosynthesis rates  
 
 Run loop to extract slopes from photosynthesis data ( time < photosynthesis end time). 
@@ -179,14 +171,14 @@ for(i in 1:length(file.names)) { # for every file in list start at the first and
   Photo.Data$Time.Min <- seq.int(from=0, to=((nrow(Photo.Data)*0.25)-0.25), by = 0.25) #set time in min
   Photo.Data <- Photo.Data %>% #filters data by phase (photosynthesis only)
      filter(Time.Min <= ptime[i])
-  Photo.Data.N <- Photo.Data[,3:25] #select desired columns
+  Photo.Data.N <- Photo.Data[,3:26] #select desired columns
   
   for(j in 1:(ncol(Photo.Data.N))){
     model <- rankLocReg(
       xall=Photo.Data$Time.Min, yall=as.numeric(Photo.Data.N[, j]),
       alpha=0.4, method="pc", verbose=TRUE) #extract slopes with percentile method and required minimum window of 40% of data to extract slope
     
-    pdf(paste0("Mcap2021/Output/Respiration/PhotosynthesisPlots/",date[i], "_",run[i],"_",rename[j],"_regression_trunc.pdf")) #generate output files
+    pdf(paste0("output/respirometry/PhotosynthesisPlots/",date[i], "_",run[i],"_",rename[j],"_regression_trunc.pdf")) #generate output files
     plot(model)
     dev.off()
     
@@ -201,16 +193,27 @@ for(i in 1:length(file.names)) { # for every file in list start at the first and
 }
 ```
 
+Issues as of 29 Nov: 
+
+- 
+
+
+
+
+
+
+
+
 Save photosynthesis data frames.  
 
 ```{r, warning=FALSE, message=FALSE}
 Photo.R <- Photo.R[-1,] #remove empty row
 
-write.csv(Photo.R, paste0("Mcap2021/Output/Respiration/Photosynthesis_rates_Mcap2021.csv", sep="")) #save P rates
+write.csv(Photo.R, paste0("output/respirometry/Photosynthesis_rates.csv")) #save P rates
 ```
 
 ```{r, warning=FALSE, message=FALSE}
-Photo.Rates <- read.csv(file = "Mcap2021/Output/Respiration/Photosynthesis_rates_Mcap2021.csv") #import P rates
+Photo.Rates <- read.csv(file = "output/respirometry/Photosynthesis_rates.csv") #import P rates
 Photo.Rates = subset(Photo.Rates, select = -c(X) ) #remove empty column
 
 #format "run" column
@@ -231,16 +234,6 @@ colnames(oxygen)[colnames(oxygen) == 'Intercept'] <- 'Photo.Intercept' #rename t
 colnames(oxygen)[colnames(oxygen) == 'umol.L.min'] <- 'P.umol.L.min' #rename to specify P
 ```
 
-Remove wells with double peaks or instances where slope extraction does not represent data.  
-
-```{r}
-oxygen$code<-paste(oxygen$Run, oxygen$Chamber.ID)
-remove<-c("2 A6", "4 D3")
-oxygen<-oxygen%>%
-  filter(!code %in% remove)
-```
-
-
 Account for volume and substract blank values. Average blank calculated for each run for P and R phases. Display mean blank value in order of R and P phases.    
 ```{r, results=TRUE, warning=FALSE, message=FALSE}
 #Account for chamber volume to convert from umol L-1 m-1 to umol m-1. This standardizes across water volumes (different because of coral size) and removes per Liter
@@ -249,8 +242,8 @@ oxygen$R.umol.min <- oxygen$R.umol.L.min * oxygen$Volume #calculate
 oxygen$P.umol.min <- oxygen$P.umol.L.min * oxygen$Volume #calculate
 
 blank_data <- subset(oxygen, Type == "Blank") #subset to blank data only
-plot(blank_data$R.umol.min , ylab="umol O2 min-1") #blanks during dark phase
-plot(blank_data$P.umol.min , ylab="umol O2 min-1") #blanks during light phase
+plot(blank_data$Run, blank_data$R.umol.min, xlab="Run", ylab="umol O2 min-1") #blanks during dark phase
+plot(blank_data$Run, blank_data$P.umol.min, xlab="Run", ylab="umol O2 min-1") #blanks during light phase
 
 #display mean blankvalues
 mean(blank_data$R.umol.min) #mean R phase blanks
@@ -266,7 +259,19 @@ oxygen <- full_join(oxygen, resp.blnk) #add R blanks to master
 oxygen <- full_join(oxygen, photo.blnk) #add P blanks to master
 ```
 
-No apparent outliers in blanks to account for.  
+Look into blanks changing in later runs - maybe use average from previous runs for runs 12-16? 
+```{r}
+#list<-c(1:8)
+#blank_mean<-oxygen%>%
+  #filter(Run %in% list)%>%
+  #summarise(mean.R.blank=mean(R.Blank.umol.min), mean.P.blank=mean(P.Blank.umol.min))
+
+#add blank values for runs 12-16 as mean value, leave all others  
+#oxygen<-oxygen%>%
+  #mutate(R.Blank.umol.min=ifelse(Run>9, blank_mean$mean.R.blank, R.Blank.umol.min))%>%
+  #mutate(P.Blank.umol.min=ifelse(Run>9, blank_mean$mean.P.blank, P.Blank.umol.min))
+
+```
 
 Subtract blank values to generate a "corrected" value for umol O2 sec-1.  
 
@@ -274,6 +279,14 @@ Subtract blank values to generate a "corrected" value for umol O2 sec-1.
 oxygen$R.umol.min.corr<-oxygen$R.umol.min-oxygen$R.Blank.umol.min #subtract R blanks
 oxygen$P.umol.min.corr<-oxygen$P.umol.min-oxygen$P.Blank.umol.min #subtract P blanks
 ```
+
+
+```{r}
+plot(oxygen$R.umol.min.corr)
+plot(oxygen$P.umol.min.corr)
+```
+
+
 
 Normalize to biologically relevant measure. Here, normalize to number of larvae. This can be substituted or changed for larval size/volume as well.  
 
@@ -303,7 +316,7 @@ oxygen.bio$GP.nmol.org.min <- oxygen.bio$GP.umol.org.min*1000 #calculate nanmole
 
 Save as .csv file.  
 ```{r, warning=FALSE, message=FALSE}
-write.csv(oxygen.bio, paste0("Mcap2021/Output/Respiration/oxygen_P_R_calc.csv", sep="")) #save final file
+write.csv(oxygen.bio, paste0("output/respirometry/oxygen_P_R_calc.csv")) #save final file
 ```
 
 

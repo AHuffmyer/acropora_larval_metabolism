@@ -173,17 +173,10 @@ for(i in 1:length(file.names)) { # for every file in list start at the first and
 }
 
 #remove the first empty row  
-Temp.R <- Temp.R[-1,]
+#Temp.R <- Temp.R[-1,]
 
 write.csv(Temp.R, paste0("output/respirometry/Resp_runs_temp.csv")) #save respiration rate data
 ```
-
-
-Issues as of 28 Nov: 
-- Run 7 D6 slope at end not representative 
-- Run 8 B4 slope at end not representative 
-- Run 8 B5 slope at end not representative 
-- check all plots for outliers to remove 
 
 Save respiration data frames.  
 

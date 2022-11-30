@@ -113,14 +113,17 @@ for(i in 1:length(file.names)) { # for every file in list start at the first and
      filter(Time.Min > rtime[i])
   Resp.Data.N <- Resp.Data[,3:26] #subset desired columns
   
+  #CONVERT to µmol/L here
+  
+  
   for(j in 1:(ncol(Resp.Data.N))){
     model <- rankLocReg(
       xall=Resp.Data$Time.Min, yall=as.numeric(Resp.Data.N[, j]), 
       alpha=0.4, method="pc", verbose=TRUE) #extract slopes, percentile rank method with minimum window size of 0.4. This means that in order to fit a slope, it has to encompass at least 40% of available datapoints. 
     
-    pdf(paste0("output/respirometry/RespirationPlots/",date[i], "_",run[i],"_",rename[j],"_regression_trunc.pdf")) #generate output file names
-    plot(model)
-    dev.off()
+   # pdf(paste0("output/respirometry/RespirationPlots/",date[i], "_",run[i],"_",rename[j],"_regression_trunc.pdf")) #generate output file names
+   # plot(model)
+   # dev.off()
     
     Resp.Rb[j,1] <- as.character(date[i]) #stores the date
     Resp.Rb[j,2] <- as.character(run[i]) #stores the run number
@@ -151,6 +154,9 @@ Save respiration data frames.
 Resp.R <- Resp.R[-1,] #remove empty column
 
 write.csv(Resp.R, paste0("output/respirometry/Respiration_rates.csv")) #save respiration rate data
+
+plot(Resp.R$umol.L.min~as.factor(Resp.R$Run), side = 2, las = 2, xlab="" )
+
 ```
 
 ```{r, warning=FALSE, message=FALSE}

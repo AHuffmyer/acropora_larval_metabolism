@@ -98,66 +98,8 @@ boxplot(PRdata$GP.nmol.org.min)
 
 P values are negative and there are no symbionts. We are only going to analyze R moving forward.  
 
-# **Plotting**  
+Calculate mean temperature values and reassign measurement treatment values if necessary.  
 
-## Plot by treatment groups    
-
-Plot data by Run   
-```{r}
-r_plot1<-PRdata %>%
-    group_by(Meas.Temp, Treatment.Temp, Days.Exposure)%>%
-    dplyr::summarise(mean=mean(abs(R.nmol.org.min)), sd=sd(abs(R.nmol.org.min)), N=length(R.nmol.org.min), se=sd/sqrt(N))%>%
-    
-    ggplot(., aes(x = as.factor(Days.Exposure), y = abs(mean), group=interaction(Meas.Temp, Treatment.Temp))) +
-    geom_hline(yintercept=0, linetype="dashed", color="black", size=0.75)+
-    geom_point(aes(fill=Meas.Temp, group=interaction(Treatment.Temp, Meas.Temp), shape=Treatment.Temp, colour=Meas.Temp), size=6, position = position_dodge(0.4)) + 
-    geom_errorbar(aes(ymin=mean-se, ymax=mean+se, group=interaction(Treatment.Temp, Meas.Temp)), width=0, linetype="solid", position=position_dodge(0.4), size=0.8, color="black")+
-    xlab("Days Exposure") + 
-    #scale_fill_manual(name="Rearing Treatment", values=c("blue","red"))+
-    #scale_color_manual(name="Rearing Treatment", values=c("blue","red"))+
-    ylab(expression(bold(paste("R (nmol ", O[2], " larva"^-1, "min"^-1, ")")))) +
-    #ylim(0, 0.05)+
-    theme_classic() + 
-    theme(
-      legend.position="right",
-      axis.title=element_text(face="bold", size=16),
-      axis.text=element_text(size=12, color="black"), 
-      legend.title=element_text(face="bold", size=14), 
-      legend.text=element_text(size=12)
-      ); r_plot1
-
-ggsave("figures/respirometry/resp_treatment.png", r_plot1, dpi=300, w=7, h=5, units="in")
-```
-
-Plot data by Run as boxplot  
-```{r}
-r_plot2<-PRdata %>%
-    group_by(Meas.Temp, Treatment.Temp, Days.Exposure)%>%
-    
-    ggplot(., aes(x = as.factor(Days.Exposure), y = abs(R.nmol.org.min), group=interaction(Meas.Temp, Treatment.Temp))) +
-    geom_hline(yintercept=0, linetype="dashed", color="black", size=0.75)+
-    geom_boxplot(aes(group=interaction(Meas.Temp, Treatment.Temp, Days.Exposure), colour=Meas.Temp), position = position_dodge(0.8)) + 
-    geom_point(aes(fill=Meas.Temp, colour=Meas.Temp, shape=Treatment.Temp), size=3, position = position_dodge(0.8)) +
-    xlab("Run Number") + 
-    #scale_fill_manual(name="Rearing Treatment", values=c("blue","red"))+
-    #scale_color_manual(name="Rearing Treatment", values=c("blue","red"))+
-    ylab(expression(bold(paste("R (nmol ", O[2], " larva"^-1, "min"^-1, ")")))) +
-    #ylim(0, 0.05)+
-    theme_classic() + 
-    theme(
-      legend.position="right",
-      axis.title=element_text(face="bold", size=16),
-      axis.text=element_text(size=12, color="black"), 
-      legend.title=element_text(face="bold", size=14), 
-      legend.text=element_text(size=12)
-      ); r_plot2
-
-ggsave("figures/respirometry/resp_boxplot.png", r_plot2, dpi=300, w=7, h=5, units="in")
-```
-
-## Plot across actual run temperature  
-
-Read in internal temperature means from each run.  
 ```{r}
 resp.temps<-read.csv("output/respirometry/Resp_runs_temp.csv")
 resp.temps = subset(resp.temps, select = -c(X) ) #remove empty column
@@ -176,7 +118,74 @@ PRdata<-left_join(PRdata,resp.temps)
 #round to 0.1°C 
 PRdata<-PRdata%>%
   mutate(Temp.C=round(Temp.C,1))
+
+PRdata<-PRdata%>%
+  group_by(Meas.Temp)%>%
+  mutate(Actual.Temp=mean(Temp.C))%>%
+  mutate(Actual.Temp=round(Actual.Temp,1))%>%
+  mutate(Actual.Temp=as.factor(Actual.Temp))
+  
+
 ```
+
+# **Plotting**  
+
+## Plot by treatment groups    
+
+Plot data by Run   
+```{r}
+r_plot1<-PRdata %>%
+    group_by(Actual.Temp, Treatment.Temp, Days.Exposure)%>%
+    dplyr::summarise(mean=mean(abs(R.nmol.org.min)), sd=sd(abs(R.nmol.org.min)), N=length(R.nmol.org.min), se=sd/sqrt(N))%>%
+    
+    ggplot(., aes(x = as.factor(Days.Exposure), y = abs(mean), group=interaction(Actual.Temp, Treatment.Temp))) +
+    geom_hline(yintercept=0, linetype="dashed", color="black", size=0.75)+
+    geom_point(aes(fill=Actual.Temp, group=interaction(Treatment.Temp, Actual.Temp), shape=Treatment.Temp, colour=Actual.Temp), size=6, position = position_dodge(0.4)) + 
+    geom_errorbar(aes(ymin=mean-se, ymax=mean+se, group=interaction(Treatment.Temp, Actual.Temp)), width=0, linetype="solid", position=position_dodge(0.4), size=0.8, color="black")+
+    xlab("Days Exposure") + 
+    scale_fill_manual(name="Measurement Temp", values=c("blue","red"))+
+    scale_color_manual(name="Measurement Temp", values=c("blue","red"))+
+    ylab(expression(bold(paste("R (nmol ", O[2], " larva"^-1, "min"^-1, ")")))) +
+    #ylim(0, 0.05)+
+    theme_classic() + 
+    theme(
+      legend.position="right",
+      axis.title=element_text(face="bold", size=16),
+      axis.text=element_text(size=12, color="black"), 
+      legend.title=element_text(face="bold", size=14), 
+      legend.text=element_text(size=12)
+      ); r_plot1
+
+ggsave("figures/respirometry/resp_treatment.png", r_plot1, dpi=300, w=7, h=5, units="in")
+```
+
+Plot data by Run as boxplot  
+```{r}
+r_plot2<-PRdata %>%
+    group_by(Actual.Temp, Treatment.Temp, Days.Exposure)%>%
+    
+    ggplot(., aes(x = as.factor(Days.Exposure), y = abs(R.nmol.org.min), group=interaction(Actual.Temp, Treatment.Temp))) +
+    geom_hline(yintercept=0, linetype="dashed", color="black", size=0.75)+
+    geom_boxplot(aes(group=interaction(Actual.Temp, Treatment.Temp, Days.Exposure), colour=Actual.Temp), position = position_dodge(0.8)) + 
+    geom_point(aes(fill=Actual.Temp, colour=Actual.Temp, shape=Treatment.Temp), size=3, position = position_dodge(0.8)) +
+    xlab("Days Exposure") + 
+    scale_fill_manual(name="Measurement Temp", values=c("blue","red"))+
+    scale_color_manual(name="Measurement Temp", values=c("blue","red"))+
+    ylab(expression(bold(paste("R (nmol ", O[2], " larva"^-1, "min"^-1, ")")))) +
+    #ylim(0, 0.05)+
+    theme_classic() + 
+    theme(
+      legend.position="right",
+      axis.title=element_text(face="bold", size=16),
+      axis.text=element_text(size=12, color="black"), 
+      legend.title=element_text(face="bold", size=14), 
+      legend.text=element_text(size=12)
+      ); r_plot2
+
+ggsave("figures/respirometry/resp_boxplot.png", r_plot2, dpi=300, w=7, h=5, units="in")
+```
+
+## Plot across actual run temperature  
 
 Plot data by internal temperature for each run     
 ```{r}
@@ -213,7 +222,7 @@ ggsave("figures/respirometry/resp_run_temperature.png", r_plot4, dpi=300, w=7, h
 
 Build linear mixed effect model and examine for Respiration.      
 ```{r, results=TRUE, warning=FALSE, message=FALSE}
-Rmodel1<-lmer(log(1+R.nmol.org.min)~Meas.Temp*Treatment.Temp*Days.Exposure + (1|Tank), data=PRdata) #run as random
+Rmodel1<-lmer(log(1+R.nmol.org.min)~Actual.Temp*Treatment.Temp*Days.Exposure + (1|Tank), data=PRdata) #run as random
 anova(Rmodel1, type="II") 
 ```
 

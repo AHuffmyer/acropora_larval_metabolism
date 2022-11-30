@@ -76,7 +76,7 @@ Calculate a P:R ratio using gross photosynthesis.
 PRdata$ratio<-abs(PRdata$GP.nmol.org.min)/abs(PRdata$R.nmol.org.min) #calculate ratio with absolute values
 #remove outliers detected by values of P:R ratio data
 boxplot(PRdata$ratio)
-PRdata<-PRdata%>%filter(ratio < 5)
+PRdata<-PRdata%>%filter(ratio < 10)
 boxplot(PRdata$ratio)
 ```
 
@@ -96,6 +96,7 @@ boxplot(PRdata$GP.nmol.org.min)
 #boxplot(PRdata$GP.nmol.org.min)
 ```
 
+P values are negative and there are no symbionts. We are only going to analyze R moving forward.  
 
 # **Plotting**  
 
@@ -103,14 +104,14 @@ boxplot(PRdata$GP.nmol.org.min)
 
 Plot data by Run   
 ```{r}
-r_plot<-PRdata %>%
+r_plot1<-PRdata %>%
     group_by(Meas.Temp, Treatment.Temp, Days.Exposure)%>%
     dplyr::summarise(mean=mean(abs(R.nmol.org.min)), sd=sd(abs(R.nmol.org.min)), N=length(R.nmol.org.min), se=sd/sqrt(N))%>%
     
     ggplot(., aes(x = as.factor(Days.Exposure), y = abs(mean), group=interaction(Meas.Temp, Treatment.Temp))) +
     geom_hline(yintercept=0, linetype="dashed", color="black", size=0.75)+
-    geom_point(aes(fill=Meas.Temp, group=interaction(Treatment.Temp, Meas.Temp), shape=Treatment.Temp, colour=Meas.Temp), size=6, position = position_dodge(0.2)) + 
-    geom_errorbar(aes(ymin=mean-se, ymax=mean+se, group=interaction(Treatment.Temp, Meas.Temp)), width=0, linetype="solid", position=position_dodge(0.2), size=1.3, color="black")+
+    geom_point(aes(fill=Meas.Temp, group=interaction(Treatment.Temp, Meas.Temp), shape=Treatment.Temp, colour=Meas.Temp), size=6, position = position_dodge(0.4)) + 
+    geom_errorbar(aes(ymin=mean-se, ymax=mean+se, group=interaction(Treatment.Temp, Meas.Temp)), width=0, linetype="solid", position=position_dodge(0.4), size=0.8, color="black")+
     xlab("Days Exposure") + 
     #scale_fill_manual(name="Rearing Treatment", values=c("blue","red"))+
     #scale_color_manual(name="Rearing Treatment", values=c("blue","red"))+
@@ -123,20 +124,20 @@ r_plot<-PRdata %>%
       axis.text=element_text(size=12, color="black"), 
       legend.title=element_text(face="bold", size=14), 
       legend.text=element_text(size=12)
-      ); r_plot
+      ); r_plot1
 
-ggsave("figures/respirometry/resp_all_runs_treatment.png", r_plot, dpi=300, w=7, h=5, units="in")
+ggsave("figures/respirometry/resp_all_runs_treatment.png", r_plot1, dpi=300, w=7, h=5, units="in")
 ```
 
 Plot data by Run as boxplot  
 ```{r}
-r_plot<-PRdata %>%
-    group_by(Meas.Temp, Treatment.Temp, Run)%>%
+r_plot2<-PRdata %>%
+    group_by(Meas.Temp, Treatment.Temp, Days.Exposure)%>%
     
-    ggplot(., aes(x = as.factor(Run), y = abs(R.nmol.org.min), group=interaction(Meas.Temp))) +
+    ggplot(., aes(x = as.factor(Days.Exposure), y = abs(R.nmol.org.min), group=interaction(Meas.Temp, Treatment.Temp))) +
     geom_hline(yintercept=0, linetype="dashed", color="black", size=0.75)+
-    geom_boxplot(aes(group=interaction(Meas.Temp, Run), colour=Meas.Temp), position = position_dodge(0.8)) + 
-    geom_point(aes(fill=Meas.Temp, colour=Meas.Temp), size=3, position = position_dodge(0.8)) +
+    geom_boxplot(aes(group=interaction(Meas.Temp, Treatment.Temp, Days.Exposure), colour=Meas.Temp), position = position_dodge(0.8)) + 
+    geom_point(aes(fill=Meas.Temp, colour=Meas.Temp, shape=Treatment.Temp), size=3, position = position_dodge(0.8)) +
     xlab("Run Number") + 
     #scale_fill_manual(name="Rearing Treatment", values=c("blue","red"))+
     #scale_color_manual(name="Rearing Treatment", values=c("blue","red"))+
@@ -149,133 +150,10 @@ r_plot<-PRdata %>%
       axis.text=element_text(size=12, color="black"), 
       legend.title=element_text(face="bold", size=14), 
       legend.text=element_text(size=12)
-      ); r_plot
+      ); r_plot2
 
-ggsave("figures/respirometry/resp_all_runs_boxplot.png", r_plot, dpi=300, w=7, h=5, units="in")
+ggsave("figures/respirometry/resp_all_runs_boxplot.png", r_plot2, dpi=300, w=7, h=5, units="in")
 ```
-
-
-Remove runs 9, 10, 11, 12. 
-
-```{r}
-remove<-c("9", "10", "11", "12")
-PRdata_filter<-PRdata%>%
-  filter(!Run %in% remove)
-```
-
-Plot data by Run as boxplot  
-```{r}
-r_plot<-PRdata_filter %>%
-    group_by(Meas.Temp, Treatment.Temp, Run)%>%
-    
-    ggplot(., aes(x = as.factor(Run), y = abs(R.nmol.org.min), group=interaction(Meas.Temp))) +
-    geom_hline(yintercept=0, linetype="dashed", color="black", size=0.75)+
-    geom_boxplot(aes(group=interaction(Meas.Temp, Run), colour=Meas.Temp), position = position_dodge(0.8)) + 
-    geom_point(aes(fill=Meas.Temp, colour=Meas.Temp), size=3, position = position_dodge(0.8)) +
-    xlab("Run Number") + 
-    #scale_fill_manual(name="Rearing Treatment", values=c("blue","red"))+
-    #scale_color_manual(name="Rearing Treatment", values=c("blue","red"))+
-    ylab(expression(bold(paste("R (nmol ", O[2], " larva"^-1, "min"^-1, ")")))) +
-    #ylim(0, 0.05)+
-    theme_classic() + 
-    theme(
-      legend.position="right",
-      axis.title=element_text(face="bold", size=16),
-      axis.text=element_text(size=12, color="black"), 
-      legend.title=element_text(face="bold", size=14), 
-      legend.text=element_text(size=12)
-      ); r_plot
-
-ggsave("figures/respirometry/resp_filtered_runs_boxplot.png", r_plot, dpi=300, w=7, h=5, units="in")
-```
-
-Plot treatment information.   
-```{r}
-r_plot<-PRdata_filter %>%
-    group_by(Meas.Temp, Treatment.Temp, Days.Exposure)%>%
-    dplyr::summarise(mean=mean(abs(R.nmol.org.min)), sd=sd(abs(R.nmol.org.min)), N=length(R.nmol.org.min), se=sd/sqrt(N))%>%
-    
-    ggplot(., aes(x = as.factor(Days.Exposure), y = abs(mean), group=interaction(Meas.Temp, Treatment.Temp))) +
-    geom_hline(yintercept=0, linetype="dashed", color="black", size=0.75)+
-    geom_point(aes(fill=Meas.Temp, group=interaction(Treatment.Temp, Meas.Temp), shape=Treatment.Temp, colour=Meas.Temp), size=6, position = position_dodge(0.2)) + 
-    geom_errorbar(aes(ymin=mean-se, ymax=mean+se, group=interaction(Treatment.Temp, Meas.Temp)), width=0, linetype="solid", position=position_dodge(0.2), size=1.3, color="black")+
-    xlab("Days Exposure") + 
-    #scale_fill_manual(name="Rearing Treatment", values=c("blue","red"))+
-    #scale_color_manual(name="Rearing Treatment", values=c("blue","red"))+
-    ylab(expression(bold(paste("R (nmol ", O[2], " larva"^-1, "min"^-1, ")")))) +
-    #ylim(0, 0.05)+
-    theme_classic() + 
-    theme(
-      legend.position="right",
-      axis.title=element_text(face="bold", size=16),
-      axis.text=element_text(size=12, color="black"), 
-      legend.title=element_text(face="bold", size=14), 
-      legend.text=element_text(size=12)
-      ); r_plot
-
-ggsave("figures/respirometry/resp_filtered_runs_treatment.png", r_plot, dpi=300, w=7, h=5, units="in")
-```
-
-Runs 1-8 are very consistent. Runs 9-16 are highly variable and are gerater in value. Oddly, runs 8-12 were on the same day and same treatment groups as runs 5-8, indicating some sort of software or hardware issue that occurred. It is unclear if we can use this data. 
-
-
-## Photosynthesis (Net)  
-
-Plot data with all runs  
-```{r}
-p_plot<-PRdata %>%
-    group_by(Meas.Temp, Treatment.Temp, Days.Exposure)%>%
-    dplyr::summarise(mean=mean(P.nmol.org.min), sd=sd(P.nmol.org.min), N=length(P.nmol.org.min), se=sd/sqrt(N))%>%
-    
-    ggplot(., aes(x = as.factor(Days.Exposure), y = mean, group=interaction(Meas.Temp, Treatment.Temp))) +
-    geom_hline(yintercept=0, linetype="dashed", color="black", size=0.75)+
-    geom_point(aes(fill=Meas.Temp, group=interaction(Treatment.Temp, Meas.Temp), shape=Treatment.Temp, colour=Meas.Temp), size=6, position = position_dodge(0.2)) + 
-    geom_errorbar(aes(ymin=mean-se, ymax=mean+se, group=interaction(Treatment.Temp, Meas.Temp)), width=0, linetype="solid", position=position_dodge(0.2), size=1.3, color="black")+
-    xlab("Days Exposure") + 
-    #scale_fill_manual(name="Rearing Treatment", values=c("blue","red"))+
-    #scale_color_manual(name="Rearing Treatment", values=c("blue","red"))+
-    ylab(expression(bold(paste("Net P (nmol ", O[2], " larva"^-1, "min"^-1, ")")))) +
-    #ylim(0, 0.05)+
-    theme_classic() + 
-    theme(
-      legend.position="right",
-      axis.title=element_text(face="bold", size=16),
-      axis.text=element_text(size=12, color="black"), 
-      legend.title=element_text(face="bold", size=14), 
-      legend.text=element_text(size=12)
-      ); p_plot
-
-ggsave("figures/respirometry/photo_all_runs_treatment.png", p_plot, dpi=300, w=7, h=5, units="in")
-```
-
-Plot data with runs 9-12 removed.    
-```{r}
-p_plot<-PRdata_filter %>%
-    group_by(Meas.Temp, Treatment.Temp, Days.Exposure)%>%
-    dplyr::summarise(mean=mean(P.nmol.org.min), sd=sd(P.nmol.org.min), N=length(P.nmol.org.min), se=sd/sqrt(N))%>%
-    
-    ggplot(., aes(x = as.factor(Days.Exposure), y = mean, group=interaction(Meas.Temp, Treatment.Temp))) +
-    geom_hline(yintercept=0, linetype="dashed", color="black", size=0.75)+
-    geom_point(aes(fill=Meas.Temp, group=interaction(Treatment.Temp, Meas.Temp), shape=Treatment.Temp, colour=Meas.Temp), size=6, position = position_dodge(0.2)) + 
-    geom_errorbar(aes(ymin=mean-se, ymax=mean+se, group=interaction(Treatment.Temp, Meas.Temp)), width=0, linetype="solid", position=position_dodge(0.2), size=1.3, color="black")+
-    xlab("Days Exposure") + 
-    #scale_fill_manual(name="Rearing Treatment", values=c("blue","red"))+
-    #scale_color_manual(name="Rearing Treatment", values=c("blue","red"))+
-    ylab(expression(bold(paste("Net P (nmol ", O[2], " larva"^-1, "min"^-1, ")")))) +
-    #ylim(0, 0.05)+
-    theme_classic() + 
-    theme(
-      legend.position="right",
-      axis.title=element_text(face="bold", size=16),
-      axis.text=element_text(size=12, color="black"), 
-      legend.title=element_text(face="bold", size=14), 
-      legend.text=element_text(size=12)
-      ); p_plot
-
-ggsave("figures/respirometry/photo_filtered_runs_treatment.png", p_plot, dpi=300, w=7, h=5, units="in")
-```
-
-Photosynthesis is not positive, therefore we are only recording respiration. This makes sense as there were no symbionts in the larvae.  
 
 # **Analyze data**    
 
@@ -283,16 +161,15 @@ Photosynthesis is not positive, therefore we are only recording respiration. Thi
 
 Build linear mixed effect model and examine for Respiration.      
 ```{r, results=TRUE, warning=FALSE, message=FALSE}
-Rmodel1<-lmer(log(1+R.nmol.org.min)~Meas.Temp*Treatment.Temp*Symbiont*Days.Exposure + (1|Run) + (1|Tank), data=PRdata_filter) #run as random
+Rmodel1<-lmer(log(1+R.nmol.org.min)~Meas.Temp*Treatment.Temp*Days.Exposure + (1|Tank), data=PRdata) #run as random
 anova(Rmodel1, type="II") 
-summary(Rmodel1)
 ```
 
 Check assumptions of model for residual normality and variance. Passes assumptions.    
 
 ```{r, results=TRUE, warning=FALSE, message=FALSE}
 qqPlot(residuals(Rmodel1))
-leveneTest(residuals(Rmodel1)~Meas.Temp*Treatment.Temp*Symbiont*Days.Exposure, data=PRdata)
+leveneTest(residuals(Rmodel1)~Meas.Temp*Treatment.Temp*Days.Exposure, data=PRdata)
 ```
 
 ### Generate summary tables of mean and SE for all variables  
@@ -300,7 +177,7 @@ leveneTest(residuals(Rmodel1)~Meas.Temp*Treatment.Temp*Symbiont*Days.Exposure, d
 Generate summary of all respiration data.  
 
 ```{r}
-summary<-PRdata_filter%>%
+summary<-PRdata%>%
   group_by(Meas.Temp, Treatment.Temp, Symbiont, Days.Exposure)%>%
   summarise(N=length(R.nmol.org.min),
             Mean_R=mean(R.nmol.org.min), 

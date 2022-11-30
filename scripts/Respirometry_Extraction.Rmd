@@ -35,6 +35,7 @@ if ("plyr" %in% rownames(installed.packages()) == 'FALSE') install.packages('ply
 if ("dplyr" %in% rownames(installed.packages()) == 'FALSE') install.packages('dplyr') 
 if ("stringr" %in% rownames(installed.packages()) == 'FALSE') install.packages('stringr') 
 if ("Rmisc" %in% rownames(installed.packages()) == 'FALSE') install.packages('Rmisc') 
+if ("respR" %in% rownames(installed.packages()) == 'FALSE') install.packages('respR') 
 
 
 #load packages
@@ -49,6 +50,7 @@ library('plyr')
 library('dplyr')
 library('stringr')
 library('Rmisc')
+library('respR')
 
 ```
 
@@ -74,17 +76,17 @@ Generate respiration data frames.
 #generate a 6 column dataframe with specific column names
 #respiration
 Resp.R <- data.frame(matrix(NA, ncol=6))
-colnames(Resp.R) <- c("Date", "Run","Sample.ID","Chamber.ID","Intercept", "umol.L.min")
+colnames(Resp.R) <- c("Date", "Run","Sample.ID","Chamber.ID","Intercept", "perc.air.L.min")
 
 Resp.Rb <- data.frame(matrix(NA, ncol=6))
-colnames(Resp.Rb) <- c("Date", "Run","Sample.ID","Chamber.ID","Intercept", "umol.L.min")
+colnames(Resp.Rb) <- c("Date", "Run","Sample.ID","Chamber.ID","Intercept", "perc.air.L.min")
 
 #photosynthesis 
 Photo.R <- data.frame(matrix(NA, ncol=6))
-colnames(Photo.R) <- c("Date", "Run","Sample.ID","Chamber.ID","Intercept", "umol.L.min")
+colnames(Photo.R) <- c("Date", "Run","Sample.ID","Chamber.ID","Intercept", "perc.air.L.min")
 
 Photo.Rb <- data.frame(matrix(NA, ncol=6))
-colnames(Photo.Rb) <- c("Date", "Run", "Sample.ID","Chamber.ID","Intercept", "umol.L.min")
+colnames(Photo.Rb) <- c("Date", "Run", "Sample.ID","Chamber.ID","Intercept", "perc.air.L.min")
 ```
 
 Load in the sample information file. It is important to have chambers in the order "A1, B1, C1, D1", rather than "A1, A2, A3, A4".  
@@ -138,15 +140,10 @@ for(i in 1:length(file.names)) { # for every file in list start at the first and
 ```
 
 Issues as of 28 Nov: 
-- Run 9 and 10 short time frame, check run times 
 - Run 7 D6 slope at end not representative 
 - Run 8 B4 slope at end not representative 
 - Run 8 B5 slope at end not representative 
-
-
-Filter out 9, 10 11, and 12? 
-
-Try running respo rates across entire frame of measurements (light + dark) to see how that compares 
+- check all plots for outliers to remove 
 
 Save respiration data frames.  
 
@@ -202,17 +199,6 @@ for(i in 1:length(file.names)) { # for every file in list start at the first and
 }
 ```
 
-Issues as of 29 Nov: 
-
-- 
-
-
-
-
-
-
-
-
 Save photosynthesis data frames.  
 
 ```{r, warning=FALSE, message=FALSE}
@@ -234,22 +220,37 @@ Photo.Rates$Run<-as.integer(Photo.Rates$Run) #format as integer
 Merge P and R files with sample info for testing and manipulation.  
 
 ```{r, warning=FALSE, message=FALSE}
-oxygen<-full_join(Sample.Info, Resp.Rates) #add respiration data
+oxygen<-dplyr::full_join(Sample.Info, Resp.Rates) #add respiration data
 colnames(oxygen)[colnames(oxygen) == 'Intercept'] <- 'Resp.Intercept' #rename to specify R
-colnames(oxygen)[colnames(oxygen) == 'umol.L.min'] <- 'R.umol.L.min' #rename to specify R
+colnames(oxygen)[colnames(oxygen) == 'perc.air.L.min'] <- 'R.perc.air.L.min' #rename to specify R
 
-oxygen<-full_join(oxygen, Photo.Rates) #add photosynthesis data
+oxygen<-dplyr::full_join(oxygen, Photo.Rates) #add photosynthesis data
 colnames(oxygen)[colnames(oxygen) == 'Intercept'] <- 'Photo.Intercept' #rename to specify P
-colnames(oxygen)[colnames(oxygen) == 'umol.L.min'] <- 'P.umol.L.min' #rename to specify P
+colnames(oxygen)[colnames(oxygen) == 'perc.air.L.min'] <- 'P.perc.air.L.min' #rename to specify P
 ```
 
-Account for volume and substract blank values. Average blank calculated for each run for P and R phases. Display mean blank value in order of R and P phases.    
+Convert air saturation rates to concentration values using respR package.   
+```{r}
+oxygen<-oxygen%>%
+  mutate(R.umol.L.min=respR::convert_DO(R.perc.air.L.min, from = "%Air", to = "umol/L", t = Meas.Temp, S = Salinity))%>%
+  mutate(P.umol.L.min=respR::convert_DO(P.perc.air.L.min, from = "%Air", to = "umol/L", t = Meas.Temp, S = Salinity))
+```
+
+Account for volume to obtain umol per minute.   
+
 ```{r, results=TRUE, warning=FALSE, message=FALSE}
-#Account for chamber volume to convert from umol L-1 m-1 to umol m-1. This standardizes across water volumes (different because of coral size) and removes per Liter
+
+#Account for chamber volume to convert from umol L-1 m-1 to umol m-1. This removes per Liter
 oxygen$R.umol.min <- oxygen$R.umol.L.min * oxygen$Volume #calculate
 
 oxygen$P.umol.min <- oxygen$P.umol.L.min * oxygen$Volume #calculate
 
+plot(oxygen$Run, oxygen$R.umol.L.min, xlab="Run", ylab="rate") #resp rates
+plot(oxygen$Run, oxygen$P.umol.L.min, xlab="Run", ylab="rate") #photo rates
+```
+
+Substract blank values. Average blank calculated for each run for P and R phases. Display mean blank value in order of R and P phases.  
+```{r}
 blank_data <- subset(oxygen, Type == "Blank") #subset to blank data only
 plot(blank_data$Run, blank_data$R.umol.min, xlab="Run", ylab="umol O2 min-1") #blanks during dark phase
 plot(blank_data$Run, blank_data$P.umol.min, xlab="Run", ylab="umol O2 min-1") #blanks during light phase
@@ -268,21 +269,9 @@ oxygen <- full_join(oxygen, resp.blnk) #add R blanks to master
 oxygen <- full_join(oxygen, photo.blnk) #add P blanks to master
 ```
 
-Look into blanks changing in later runs - maybe use average from previous runs for runs 12-16? 
-```{r}
-#list<-c(1:8)
-#blank_mean<-oxygen%>%
-  #filter(Run %in% list)%>%
-  #summarise(mean.R.blank=mean(R.Blank.umol.min), mean.P.blank=mean(P.Blank.umol.min))
+Blanks look good across runs.  
 
-#add blank values for runs 12-16 as mean value, leave all others  
-#oxygen<-oxygen%>%
-  #mutate(R.Blank.umol.min=ifelse(Run>9, blank_mean$mean.R.blank, R.Blank.umol.min))%>%
-  #mutate(P.Blank.umol.min=ifelse(Run>9, blank_mean$mean.P.blank, P.Blank.umol.min))
-
-```
-
-Subtract blank values to generate a "corrected" value for umol O2 sec-1.  
+Subtract blank values to generate a "corrected" value for umol O2 min-1.  
 
 ```{r, warning=FALSE, message=FALSE}
 oxygen$R.umol.min.corr<-oxygen$R.umol.min-oxygen$R.Blank.umol.min #subtract R blanks
@@ -295,8 +284,6 @@ plot(oxygen$R.umol.min.corr)
 plot(oxygen$P.umol.min.corr)
 ```
 
-
-
 Normalize to biologically relevant measure. Here, normalize to number of larvae. This can be substituted or changed for larval size/volume as well.  
 
 ```{r, warning=FALSE, message=FALSE}
@@ -305,9 +292,8 @@ oxygen.bio <- droplevels(oxygen.bio) #drop unused factor levels
 
 #respiration
 oxygen.bio$R.umol.org.min <- oxygen.bio$R.umol.min.corr/oxygen.bio$Org.Number #calculate oxygen per organism (larvae or recruit)
-#oxygen.bio$R.umol.org.min <- oxygen.bio$R.umol.org.sec*60 #calculate oxygen per organism per minute - not used in this script
-oxygen.bio$R.nmol.org.min <- oxygen.bio$R.umol.org.min*1000 #calculate nanmoles 
-#oxygen.bio$R.nmol.total.min <- oxygen.bio$R.nmol.org.min*oxygen.bio$Org.Number #calculate total gross photosynthesis (not normalized to number of organisms) 
+
+oxygen.bio$R.nmol.org.min <- oxygen.bio$R.umol.org.min*1000 #calculate nanomoles 
 
 #net photosynthesis
 oxygen.bio$P.umol.org.min <- oxygen.bio$P.umol.min.corr/oxygen.bio$Org.Number #calculate oxygen per organism (larvae or recruit)

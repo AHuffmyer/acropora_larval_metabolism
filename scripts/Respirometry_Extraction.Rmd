@@ -65,7 +65,8 @@ path.p<-"data/respirometry/runs" #location of files
 Bring in the file names.
 ```{r, warning=FALSE, message=FALSE}
 # bring in the respiration file names
-file.names<-basename(list.files(path = path.p, pattern = "csv$", recursive = TRUE)) #list all xlsx file names in the folder and subfolders
+file.names<-basename(list.files(path = path.p, pattern = "csv$", recursive = TRUE)) 
+#file.names<-"20221026_SDR710_Run06_Oxygen.csv"
 ```
 
 ## Respiration rates  
@@ -76,17 +77,17 @@ Generate respiration data frames.
 #generate a 6 column dataframe with specific column names
 #respiration
 Resp.R <- data.frame(matrix(NA, ncol=6))
-colnames(Resp.R) <- c("Date", "Run","Sample.ID","Chamber.ID","Intercept", "perc.air.L.min")
+colnames(Resp.R) <- c("Date", "Run","Sample.ID","Chamber.ID","Intercept", "umol.L.min")
 
 Resp.Rb <- data.frame(matrix(NA, ncol=6))
-colnames(Resp.Rb) <- c("Date", "Run","Sample.ID","Chamber.ID","Intercept", "perc.air.L.min")
+colnames(Resp.Rb) <- c("Date", "Run","Sample.ID","Chamber.ID","Intercept", "umol.L.min")
 
 #photosynthesis 
 Photo.R <- data.frame(matrix(NA, ncol=6))
-colnames(Photo.R) <- c("Date", "Run","Sample.ID","Chamber.ID","Intercept", "perc.air.L.min")
+colnames(Photo.R) <- c("Date", "Run","Sample.ID","Chamber.ID","Intercept", "umol.L.min")
 
 Photo.Rb <- data.frame(matrix(NA, ncol=6))
-colnames(Photo.Rb) <- c("Date", "Run", "Sample.ID","Chamber.ID","Intercept", "perc.air.L.min")
+colnames(Photo.Rb) <- c("Date", "Run", "Sample.ID","Chamber.ID","Intercept", "umol.L.min")
 ```
 
 Load in the sample information file. It is important to have chambers in the order "A1, B1, C1, D1", rather than "A1, A2, A3, A4".  
@@ -114,22 +115,27 @@ for(i in 1:length(file.names)) { # for every file in list start at the first and
   Resp.Data <- Resp.Data %>% #filters data by phase (respiration only)
      filter(Time.Min > rtime[i])
   Resp.Data.N <- Resp.Data[,3:26] #subset desired columns
+
+ #convert to umol/L using the respR package 
+  Resp.Data.DO<-as.matrix(Resp.Data.N)
+  Resp.Data.DO <- respR::convert_DO(Resp.Data.DO, from = "%Air", to = "umol/L", t = Resp.Data$Temp, S = 36)
   
-  #CONVERT to µmol/L here
+  #add column names back in 
+  Resp.Data.DO<-as.data.frame(Resp.Data.DO)
+
   
-  
-  for(j in 1:(ncol(Resp.Data.N))){
+  for(j in 1:(ncol(Resp.Data.DO))){
     model <- rankLocReg(
-      xall=Resp.Data$Time.Min, yall=as.numeric(Resp.Data.N[, j]), 
+      xall=Resp.Data$Time.Min, yall=as.numeric(Resp.Data.DO[, j]), 
       alpha=0.4, method="pc", verbose=TRUE) #extract slopes, percentile rank method with minimum window size of 0.4. This means that in order to fit a slope, it has to encompass at least 40% of available datapoints. 
     
-   # pdf(paste0("output/respirometry/RespirationPlots/",date[i], "_",run[i],"_",rename[j],"_regression_trunc.pdf")) #generate output file names
-   # plot(model)
-   # dev.off()
+    pdf(paste0("output/respirometry/RespirationPlots/",date[i], "_",run[i],"_",rename[j],"_regression_trunc.pdf")) #generate output file names
+    plot(model)
+    dev.off()
     
     Resp.Rb[j,1] <- as.character(date[i]) #stores the date
     Resp.Rb[j,2] <- as.character(run[i]) #stores the run number
-    Resp.Rb[j,3] <- as.character(samp[j+(i-1)*ncol(Resp.Data.N)]) #stores the sample ID
+    Resp.Rb[j,3] <- as.character(samp[j+(i-1)*ncol(Resp.Data.DO)]) #stores the sample ID
     Resp.Rb[j,4] <- as.character(rename[j]) #stores the chamber ID
     Resp.Rb[j,5:6] <- model$allRegs[i,c(4,5)] #inserts slope and intercept in the dataframe
     
@@ -138,6 +144,40 @@ for(i in 1:length(file.names)) { # for every file in list start at the first and
 }
 
 ```
+
+Calculate average temperature of each run and export to a table.  
+```{r}
+# list files 
+file.names<-basename(list.files(path = path.p, pattern = "csv$", recursive = TRUE)) 
+#file.names<-"20221026_SDR710_Run06_Oxygen.csv"
+
+#generate matrix to populate
+Temp.R <- data.frame(matrix(NA, ncol=3))
+colnames(Temp.R) <- c("Date", "Run","Temp.C")
+
+Temp.Rb <- data.frame(matrix(NA, ncol=3))
+colnames(Temp.Rb) <- c("Date", "Run","Temp.C")
+
+#read in temps and generate mean values  
+for(i in 1:length(file.names)) { # for every file in list start at the first and run this following function
+  Temp.Data <-read.table(file.path(path.p,file.names[i]), skip = 56, header=T, sep=",", na.string="NA", fill = TRUE, as.is=TRUE, fileEncoding="latin1") #reads in the data files
+  Temp.Data$Temp <- Temp.Data[,31] #assigns temp column
+  
+    Temp.Rb[j,1] <- as.character(date[i]) #stores the date
+    Temp.Rb[j,2] <- as.character(run[i]) #stores the run number
+    Temp.Rb[j,3] <- mean(Temp.Data$Temp) #stores the sample ID
+    
+    Temp.R <- rbind(Temp.R, Temp.Rb) #bind final data frame
+    Temp.R <- na.omit(Temp.R)
+  
+}
+
+#remove the first empty row  
+Temp.R <- Temp.R[-1,]
+
+write.csv(Temp.R, paste0("output/respirometry/Resp_runs_temp.csv")) #save respiration rate data
+```
+
 
 Issues as of 28 Nov: 
 - Run 7 D6 slope at end not representative 
@@ -179,9 +219,16 @@ for(i in 1:length(file.names)) { # for every file in list start at the first and
      filter(Time.Min <= ptime[i])
   Photo.Data.N <- Photo.Data[,3:26] #select desired columns
   
-  for(j in 1:(ncol(Photo.Data.N))){
+   #convert to umol/L using the respR package 
+ Photo.Data.DO<-as.matrix(Photo.Data.N)
+  Photo.Data.DO <- respR::convert_DO(Photo.Data.DO, from = "%Air", to = "umol/L", t = Resp.Data$Temp, S = 36)
+  
+  #add column names back in 
+  Photo.Data.DO<-as.data.frame(Photo.Data.DO)
+  
+  for(j in 1:(ncol(Photo.Data.DO))){
     model <- rankLocReg(
-      xall=Photo.Data$Time.Min, yall=as.numeric(Photo.Data.N[, j]),
+      xall=Photo.Data$Time.Min, yall=as.numeric(Photo.Data.DO[, j]),
       alpha=0.4, method="pc", verbose=TRUE) #extract slopes with percentile method and required minimum window of 40% of data to extract slope
     
     pdf(paste0("output/respirometry/PhotosynthesisPlots/",date[i], "_",run[i],"_",rename[j],"_regression_trunc.pdf")) #generate output files
@@ -190,13 +237,46 @@ for(i in 1:length(file.names)) { # for every file in list start at the first and
     
     Photo.Rb[j,1] <- as.character(date[i]) #stores the date
     Photo.Rb[j,2] <- as.character(run[i]) #stores the run number
-    Photo.Rb[j,3] <- as.character(samp[j+(i-1)*ncol(Photo.Data.N)]) #stores the sample ID
+    Photo.Rb[j,3] <- as.character(samp[j+(i-1)*ncol(Photo.Data.DO)]) #stores the sample ID
     Photo.Rb[j,4] <- as.character(rename[j]) #stores the chamber ID
     Photo.Rb[j,5:6] <- model$allRegs[i,c(4,5)] #inserts slope and intercept in the dataframe
     
   }
   Photo.R <- rbind(Photo.R, Photo.Rb) #bind final data frame
 }
+```
+
+Calculate average temperature of each run and export to a table.  
+```{r}
+# list files 
+file.names<-basename(list.files(path = path.p, pattern = "csv$", recursive = TRUE)) 
+#file.names<-"20221026_SDR710_Run06_Oxygen.csv"
+
+#generate matrix to populate
+Temp.P <- data.frame(matrix(NA, ncol=3))
+colnames(Temp.P) <- c("Date", "Run","Temp.C")
+
+Temp.Pb <- data.frame(matrix(NA, ncol=3))
+colnames(Temp.Pb) <- c("Date", "Run","Temp.C")
+
+#read in temps and generate mean values  
+for(i in 1:length(file.names)) { # for every file in list start at the first and run this following function
+  Temp.Data <-read.table(file.path(path.p,file.names[i]), skip = 56, header=T, sep=",", na.string="NA", fill = TRUE, as.is=TRUE, fileEncoding="latin1") #reads in the data files
+  Temp.Data$Temp <- Temp.Data[,31] #assigns temp column
+  
+    Temp.Pb[j,1] <- as.character(date[i]) #stores the date
+    Temp.Pb[j,2] <- as.character(run[i]) #stores the run number
+    Temp.Pb[j,3] <- mean(Temp.Data$Temp) #stores the sample ID
+    
+    Temp.P <- rbind(Temp.P, Temp.Pb) #bind final data frame
+    Temp.P <- na.omit(Temp.P)
+  
+}
+
+#remove the first empty row  
+Temp.P <- Temp.P[-1,]
+
+write.csv(Temp.P, paste0("output/respirometry/Photo_runs_temp.csv")) #save respiration rate data
 ```
 
 Save photosynthesis data frames.  
@@ -217,23 +297,58 @@ Photo.Rates<-Photo.Rates %>% #Format as "#" rather than "Run#"
 Photo.Rates$Run<-as.integer(Photo.Rates$Run) #format as integer
 ```
 
+## Standardize and normalize  
+
 Merge P and R files with sample info for testing and manipulation.  
 
 ```{r, warning=FALSE, message=FALSE}
 oxygen<-dplyr::full_join(Sample.Info, Resp.Rates) #add respiration data
 colnames(oxygen)[colnames(oxygen) == 'Intercept'] <- 'Resp.Intercept' #rename to specify R
-colnames(oxygen)[colnames(oxygen) == 'perc.air.L.min'] <- 'R.perc.air.L.min' #rename to specify R
+colnames(oxygen)[colnames(oxygen) == 'umol.L.min'] <- 'R.umol.L.min' #rename to specify R
 
 oxygen<-dplyr::full_join(oxygen, Photo.Rates) #add photosynthesis data
 colnames(oxygen)[colnames(oxygen) == 'Intercept'] <- 'Photo.Intercept' #rename to specify P
-colnames(oxygen)[colnames(oxygen) == 'perc.air.L.min'] <- 'P.perc.air.L.min' #rename to specify P
+colnames(oxygen)[colnames(oxygen) == 'umol.L.min'] <- 'P.umol.L.min' #rename to specify P
 ```
 
-Convert air saturation rates to concentration values using respR package.   
+Convert air saturation rates to concentration values using respR package (not used here, we did this in the caculation loop).   
 ```{r}
+#oxygen<-oxygen%>%
+ # mutate(R.umol.L.min=respR::convert_DO(R.perc.air.L.min, from = "%Air", to = "umol/L", t = Meas.Temp, S = Salinity))%>%
+  #mutate(P.umol.L.min=respR::convert_DO(P.perc.air.L.min, from = "%Air", to = "umol/L", t = Meas.Temp, S = Salinity))
+```
+
+Remove samples that have inaccurate slope extraction for respiration rates (determined by PDF output files)  
+
+```{r}
+#Run 3 B3
+#Run 3 D4
+#Run 7 D6 
+#Run 8 B4 
+#Run 12 A3
+#Run 12 B5
+#Run 13 D6
+#Run 15 A4
+#Run 15 D6
+#Run 6 D4
+#Run 8 C4
+#Run 10 D4
+
 oxygen<-oxygen%>%
-  mutate(R.umol.L.min=respR::convert_DO(R.perc.air.L.min, from = "%Air", to = "umol/L", t = Meas.Temp, S = Salinity))%>%
-  mutate(P.umol.L.min=respR::convert_DO(P.perc.air.L.min, from = "%Air", to = "umol/L", t = Meas.Temp, S = Salinity))
+  mutate(code=paste(Run, Chamber.ID))%>%
+  filter(!code=="3 B3")%>%
+  filter(!code=="3 D4")%>%
+  filter(!code=="7 D6")%>%
+  filter(!code=="8 B4")%>%
+  filter(!code=="12 A3")%>%
+  filter(!code=="12 B5")%>%
+  filter(!code=="13 D6")%>%
+  filter(!code=="15 A4")%>%
+  filter(!code=="15 D6")%>%
+  filter(!code=="6 D5")%>%
+  filter(!code=="8 C4")%>%
+  filter(!code=="10 D4")%>%
+  select(!code)
 ```
 
 Account for volume to obtain umol per minute.   
@@ -247,17 +362,20 @@ oxygen$P.umol.min <- oxygen$P.umol.L.min * oxygen$Volume #calculate
 
 plot(oxygen$Run, oxygen$R.umol.L.min, xlab="Run", ylab="rate") #resp rates
 plot(oxygen$Run, oxygen$P.umol.L.min, xlab="Run", ylab="rate") #photo rates
+
+plot(oxygen$Run, oxygen$R.umol.min, xlab="Run", ylab="rate") #resp rates
+plot(oxygen$Run, oxygen$P.umol.min, xlab="Run", ylab="rate") #photo rates
 ```
 
 Substract blank values. Average blank calculated for each run for P and R phases. Display mean blank value in order of R and P phases.  
 ```{r}
 blank_data <- subset(oxygen, Type == "Blank") #subset to blank data only
-plot(blank_data$Run, blank_data$R.umol.min, xlab="Run", ylab="umol O2 min-1") #blanks during dark phase
-plot(blank_data$Run, blank_data$P.umol.min, xlab="Run", ylab="umol O2 min-1") #blanks during light phase
+plot(as.factor(blank_data$Run), blank_data$R.umol.min, xlab="Run", ylab="umol O2 min-1") #blanks during dark phase
+plot(as.factor(blank_data$Run), blank_data$P.umol.min, xlab="Run", ylab="umol O2 min-1") #blanks during light phase
 
 #display mean blankvalues
-mean(blank_data$R.umol.min) #mean R phase blanks
-mean(blank_data$P.umol.min) #mean P phase blanks
+mean(blank_data$R.umol.min, na.rm=TRUE) #mean R phase blanks
+mean(blank_data$P.umol.min, na.rm=TRUE) #mean P phase blanks
 
 resp.blnk <- aggregate(R.umol.min ~ Date*Run, data=blank_data, mean) #calculate average blank during light for each run
 colnames(resp.blnk)[colnames(resp.blnk) == 'R.umol.min'] <- 'R.Blank.umol.min' #rename to specify blank for R
@@ -278,7 +396,6 @@ oxygen$R.umol.min.corr<-oxygen$R.umol.min-oxygen$R.Blank.umol.min #subtract R bl
 oxygen$P.umol.min.corr<-oxygen$P.umol.min-oxygen$P.Blank.umol.min #subtract P blanks
 ```
 
-
 ```{r}
 plot(oxygen$R.umol.min.corr)
 plot(oxygen$P.umol.min.corr)
@@ -291,22 +408,22 @@ oxygen.bio <- oxygen %>% filter(Type == "Sample") #isolate only biological sampl
 oxygen.bio <- droplevels(oxygen.bio) #drop unused factor levels
 
 #respiration
-oxygen.bio$R.umol.org.min <- oxygen.bio$R.umol.min.corr/oxygen.bio$Org.Number #calculate oxygen per organism (larvae or recruit)
-
+oxygen.bio$R.umol.org.min <- oxygen.bio$R.umol.min.corr/oxygen.bio$Org.Number #calculate oxygen per organism 
 oxygen.bio$R.nmol.org.min <- oxygen.bio$R.umol.org.min*1000 #calculate nanomoles 
 
 #net photosynthesis
-oxygen.bio$P.umol.org.min <- oxygen.bio$P.umol.min.corr/oxygen.bio$Org.Number #calculate oxygen per organism (larvae or recruit)
-#oxygen.bio$P.umol.org.min <- oxygen.bio$P.umol.org.sec*60 #calculate oxygen per organism per minute - not used in this script
+oxygen.bio$P.umol.org.min <- oxygen.bio$P.umol.min.corr/oxygen.bio$Org.Number #calculate oxygen per organism 
 oxygen.bio$P.nmol.org.min <- oxygen.bio$P.umol.org.min*1000 #calculate nanmoles 
-#oxygen.bio$P.nmol.total.min <- oxygen.bio$P.nmol.org.min*oxygen.bio$Org.Number #calculate total gross photosynthesis (not normalized to number of organisms) 
 
 #gross photosynthesis
 oxygen.bio$GP.umol.min.corr <- oxygen.bio$P.umol.min.corr - oxygen.bio$R.umol.min.corr #calculate gross photosynthesis by subtracting out oxygen consumption from respiration
-oxygen.bio$GP.umol.org.min <- oxygen.bio$GP.umol.min.corr/oxygen.bio$Org.Number #calculate oxygen per organism (larvae or recruit)
-#oxygen.bio$GP.umol.org.min <- oxygen.bio$GP.umol.org.sec*60 #calculate oxygen per organism per minute - not used in this script
+oxygen.bio$GP.umol.org.min <- oxygen.bio$GP.umol.min.corr/oxygen.bio$Org.Number #calculate oxygen per organism
 oxygen.bio$GP.nmol.org.min <- oxygen.bio$GP.umol.org.min*1000 #calculate nanmoles 
-#oxygen.bio$GP.nmol.total.min <- oxygen.bio$GP.nmol.org.min*oxygen.bio$Org.Number #calculate total gross photosynthesis (not normalized to number of organisms) 
+```
+
+Plot values 
+```{r}
+plot(oxygen.bio$R.nmol.org.min)
 ```
 
 Save as .csv file.  

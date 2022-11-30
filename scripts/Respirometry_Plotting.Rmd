@@ -84,8 +84,8 @@ Look for outliers in the data.
 
 ```{r}
 boxplot(PRdata$R.nmol.org.min)
-#PRdata<-PRdata%>%filter(R.nmol.org.min < 10)
-#boxplot(PRdata$R.nmol.org.min)
+PRdata<-PRdata%>%filter(R.nmol.org.min > -0.10)
+boxplot(PRdata$R.nmol.org.min)
 
 boxplot(PRdata$P.nmol.org.min)
 #PRdata<-PRdata%>%filter(P.nmol.org.min < 10)
@@ -171,6 +171,8 @@ Check assumptions of model for residual normality and variance. Passes assumptio
 qqPlot(residuals(Rmodel1))
 leveneTest(residuals(Rmodel1)~Meas.Temp*Treatment.Temp*Days.Exposure, data=PRdata)
 ```
+
+Meets assumptions.  
 
 ### Generate summary tables of mean and SE for all variables  
 

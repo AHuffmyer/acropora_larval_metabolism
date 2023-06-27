@@ -14,6 +14,8 @@ editor_options:
   chunk_output_type: console
 ---
 
+NEED TO FIX LOADING ORDER OF PLATES ISSUE 
+
 ## Setup  
 
 Set up workspace, set options, and load required packages.    
@@ -96,8 +98,8 @@ Load in the sample information file. It is important to have chambers in the ord
 Sample.Info<-read.csv("data/respirometry/Resp_Sample_Info.csv") #information on life stage, number of individuals, runs, etc.
 rename <- Sample.Info$Chamber.ID
 samp <- Sample.Info$Sample.ID
-run <- str_sub(file.names, 17, 21) #grab run from file name
-date <- str_sub(file.names, 1, str_length(file.names)-24) #grab date from file name
+run <- str_sub(file.names, 20, 24) #grab run from file name
+date <- str_sub(file.names, 4, str_length(file.names)-24) #grab date from file name
 
 #load in respiration start times as a list the same length as the number of files
 starttimes<-read.csv("data/respirometry/starttimes.csv") #read in file of starting R and P phase times
@@ -181,7 +183,7 @@ write.csv(Temp.R, paste0("output/respirometry/Resp_runs_temp.csv")) #save respir
 Save respiration data frames.  
 
 ```{r, results=FALSE, warning=FALSE, message=FALSE}
-Resp.R <- Resp.R[-1,] #remove empty column
+#Resp.R <- Resp.R[-1,] #remove empty column
 
 write.csv(Resp.R, paste0("output/respirometry/Respiration_rates.csv")) #save respiration rate data
 
@@ -267,7 +269,7 @@ for(i in 1:length(file.names)) { # for every file in list start at the first and
 }
 
 #remove the first empty row  
-Temp.P <- Temp.P[-1,]
+#Temp.P <- Temp.P[-1,]
 
 write.csv(Temp.P, paste0("output/respirometry/Photo_runs_temp.csv")) #save respiration rate data
 ```
@@ -327,21 +329,21 @@ Remove samples that have inaccurate slope extraction for respiration rates (dete
 #Run 8 C4
 #Run 10 D4
 
-oxygen<-oxygen%>%
-  mutate(code=paste(Run, Chamber.ID))%>%
-  filter(!code=="3 B3")%>%
-  filter(!code=="3 D4")%>%
-  filter(!code=="7 D6")%>%
-  filter(!code=="8 B4")%>%
-  filter(!code=="12 A3")%>%
-  filter(!code=="12 B5")%>%
-  filter(!code=="13 D6")%>%
-  filter(!code=="15 A4")%>%
-  filter(!code=="15 D6")%>%
-  filter(!code=="6 D5")%>%
-  filter(!code=="8 C4")%>%
-  filter(!code=="10 D4")%>%
-  select(!code)
+#oxygen<-oxygen%>%
+#  mutate(code=paste(Run, Chamber.ID))%>%
+#  filter(!code=="3 B3")%>%
+#  filter(!code=="3 D4")%>%
+#  filter(!code=="7 D6")%>%
+#  filter(!code=="8 B4")%>%
+#  filter(!code=="12 A3")%>%
+#  filter(!code=="12 B5")%>%
+#  filter(!code=="13 D6")%>%
+#  filter(!code=="15 A4")%>%
+#  filter(!code=="15 D6")%>%
+#  filter(!code=="6 D5")%>%
+#  filter(!code=="8 C4")%>%
+#  filter(!code=="10 D4")%>%
+#  select(!code)
 ```
 
 Account for volume to obtain umol per minute.   

@@ -88,8 +88,8 @@ PRdata<-PRdata%>%filter(R.nmol.org.min > -0.10)
 boxplot(PRdata$R.nmol.org.min)
 
 boxplot(PRdata$P.nmol.org.min)
-#PRdata<-PRdata%>%filter(P.nmol.org.min < 10)
-#boxplot(PRdata$P.nmol.org.min)
+PRdata<-PRdata%>%filter(!P.nmol.org.min < -0.1)
+boxplot(PRdata$P.nmol.org.min)
 
 boxplot(PRdata$GP.nmol.org.min)
 #PRdata<-PRdata%>%filter(GP.nmol.org.min < 10)
@@ -225,6 +225,7 @@ Build linear mixed effect model and examine for Respiration.
 Rmodel1<-lmer(log(1+R.nmol.org.min)~Actual.Temp*Treatment.Temp*Days.Exposure + (1|Tank), data=PRdata) #run as random
 anova(Rmodel1, type="II") 
 ```
+There is an effect of temperature and time. 
 
 Check assumptions of model for residual normality and variance. Passes assumptions.    
 

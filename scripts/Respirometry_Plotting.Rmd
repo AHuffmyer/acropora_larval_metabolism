@@ -201,6 +201,35 @@ r_plot1a<-PRdata %>%
 ggsave("figures/respirometry/resp_treatment_boxplot.png", r_plot1a, dpi=300, w=7, h=5, units="in")
 ```
 
+Plot data by treatment groups summarized by measurement temperature.    
+```{r}
+r_plot2a<-PRdata%>%
+    group_by(Actual.Temp, Days.Exposure)%>%
+    dplyr::summarise(mean=mean(R.nmol.org.min), sd=sd(R.nmol.org.min), N=length(R.nmol.org.min), se=sd/sqrt(N))%>%
+  
+    ggplot(., aes(x = as.factor(Days.Exposure), y = mean, fill=Actual.Temp, colour=Actual.Temp)) +
+  
+    geom_hline(yintercept=0, linetype="dashed", color="black", size=0.75)+
+    geom_point(aes(fill=Actual.Temp, colour=Actual.Temp), size=4, alpha=0.6, position=position_dodge(0.3)) + 
+    geom_errorbar(aes(ymin=mean-se, ymax=mean+se), width=0, linetype="solid", size=0.8, color="black", position=position_dodge(0.3))+
+  geom_line(aes(colour=Actual.Temp, group=Actual.Temp), size=1.5, alpha=0.6, position=position_dodge(0.3))+
+  
+    xlab("Days Exposure") + 
+    scale_fill_manual(name="Measurement Temp", values=c("blue","red"))+
+    scale_colour_manual(name="Measurement Temp", values=c("blue","red"))+
+    ylab(expression(bold(paste("R (nmol ", O[2], " larva"^-1, "min"^-1, ")")))) +
+    theme_classic() + 
+    theme(
+      legend.position="right",
+      axis.title=element_text(face="bold", size=16),
+      axis.text=element_text(size=12, color="black"), 
+      legend.title=element_text(face="bold", size=14), 
+      legend.text=element_text(size=12)
+      ); r_plot2a
+
+ggsave("figures/respirometry/resp_treatment_boxplot_summary.png", r_plot2a, dpi=300, w=7, h=5, units="in")
+```
+
 Plot photosynthesis. 
 ```{r}
 p_plot1<-PRdata %>%

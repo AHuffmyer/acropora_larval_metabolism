@@ -71,32 +71,43 @@ PRdata$SDR<-as.factor(PRdata$SDR)
 PRdata$Run<-as.factor(PRdata$Run)
 ```
 
-Calculate a P:R ratio using gross photosynthesis.  
+Substitute net positive oxygen values during R runs with 0. Do the opposite for P runs. Calculate R as inverse values. 
+```{r}
+PRdata<-PRdata%>%
+  mutate(R.nmol.org.min=if_else(R.nmol.org.min>0, 0, R.nmol.org.min))%>%
+  mutate(P.nmol.org.min=if_else(P.nmol.org.min<0, 0, P.nmol.org.min))%>%
+  mutate(R.nmol.org.min=R.nmol.org.min*-1)%>%
+  mutate(GP.nmol.org.min=P.nmol.org.min+R.nmol.org.min)
+
+boxplot(PRdata$R.nmol.org.min)
+boxplot(PRdata$P.nmol.org.min)
+boxplot(PRdata$GP.nmol.org.min)
+```
+
+Calculate a P:R ratio using gross photosynthesis and respiration.  
 ```{r, warning=FALSE, message=FALSE}
-PRdata$ratio<-abs(PRdata$GP.nmol.org.min)/abs(PRdata$R.nmol.org.min) #calculate ratio with absolute values
+PRdata$ratio<-PRdata$GP.nmol.org.min/PRdata$R.nmol.org.min #calculate ratio with absolute values
 #remove outliers detected by values of P:R ratio data
 boxplot(PRdata$ratio)
-PRdata<-PRdata%>%filter(ratio < 10)
+PRdata<-PRdata%>%filter(ratio < 20)
 boxplot(PRdata$ratio)
 ```
+
+There are only a few values, this is expected because most of P observations were 0. 
 
 Look for outliers in the data.  
 
 ```{r}
 boxplot(PRdata$R.nmol.org.min)
-PRdata<-PRdata%>%filter(R.nmol.org.min > -0.10)
+PRdata<-PRdata%>%filter(R.nmol.org.min < 0.10)
 boxplot(PRdata$R.nmol.org.min)
 
 boxplot(PRdata$P.nmol.org.min)
-PRdata<-PRdata%>%filter(!P.nmol.org.min < -0.1)
-boxplot(PRdata$P.nmol.org.min)
 
 boxplot(PRdata$GP.nmol.org.min)
-#PRdata<-PRdata%>%filter(GP.nmol.org.min < 10)
-#boxplot(PRdata$GP.nmol.org.min)
 ```
 
-P values are negative and there are no symbionts. We are only going to analyze R moving forward.  
+We will mainly focus on R analysis, there are few observations of photosynthesis and we did not observe symbiont infections.  
 
 Calculate mean temperature values and reassign measurement treatment values if necessary.  
 
@@ -107,6 +118,7 @@ resp.temps = subset(resp.temps, select = -c(X) ) #remove empty column
 #format "run" column
 resp.temps<-resp.temps %>% #Format as "#" rather than "Run#"
   mutate(Run = str_sub(Run, 4, -1))
+
 resp.temps$Run<-as.integer(resp.temps$Run) #format as integer
 resp.temps$Run<-as.factor(resp.temps$Run) #format as factor
 ```
@@ -124,27 +136,32 @@ PRdata<-PRdata%>%
   mutate(Actual.Temp=mean(Temp.C))%>%
   mutate(Actual.Temp=round(Actual.Temp,1))%>%
   mutate(Actual.Temp=as.factor(Actual.Temp))
-  
 
+temp_summary<-PRdata%>%
+  group_by(Meas.Temp, Run)%>%
+  summarize(mean.temp=mean(Temp.C));temp_summary
 ```
+
+Target temperatures looked good. Generate summary values to use for plotting. 
 
 # **Plotting**  
 
 ## Plot by treatment groups    
 
-Plot data by Run   
+Plot data by treatment groups.    
 ```{r}
 r_plot1<-PRdata %>%
     group_by(Actual.Temp, Treatment.Temp, Days.Exposure)%>%
-    dplyr::summarise(mean=mean(abs(R.nmol.org.min)), sd=sd(abs(R.nmol.org.min)), N=length(R.nmol.org.min), se=sd/sqrt(N))%>%
+    dplyr::summarise(mean=mean(R.nmol.org.min), sd=sd(R.nmol.org.min), N=length(R.nmol.org.min), se=sd/sqrt(N))%>%
     
-    ggplot(., aes(x = as.factor(Days.Exposure), y = abs(mean), group=interaction(Actual.Temp, Treatment.Temp))) +
+    ggplot(., aes(x = as.factor(Days.Exposure), y = mean)) +
     geom_hline(yintercept=0, linetype="dashed", color="black", size=0.75)+
-    geom_point(aes(fill=Actual.Temp, group=interaction(Treatment.Temp, Actual.Temp), shape=Treatment.Temp, colour=Actual.Temp), size=6, position = position_dodge(0.4)) + 
+    geom_point(aes(fill=Actual.Temp, shape=Treatment.Temp, colour=Actual.Temp), size=6, position = position_dodge(0.4)) + 
     geom_errorbar(aes(ymin=mean-se, ymax=mean+se, group=interaction(Treatment.Temp, Actual.Temp)), width=0, linetype="solid", position=position_dodge(0.4), size=0.8, color="black")+
     xlab("Days Exposure") + 
     scale_fill_manual(name="Measurement Temp", values=c("blue","red"))+
     scale_color_manual(name="Measurement Temp", values=c("blue","red"))+
+    scale_shape_manual(name="Treatment", values=c(17,19))+
     ylab(expression(bold(paste("R (nmol ", O[2], " larva"^-1, "min"^-1, ")")))) +
     #ylim(0, 0.05)+
     theme_classic() + 
@@ -159,20 +176,19 @@ r_plot1<-PRdata %>%
 ggsave("figures/respirometry/resp_treatment.png", r_plot1, dpi=300, w=7, h=5, units="in")
 ```
 
-Plot data by Run as boxplot  
+Plot data by treatment groups with boxplot.    
 ```{r}
-r_plot2<-PRdata %>%
-    group_by(Actual.Temp, Treatment.Temp, Days.Exposure)%>%
+r_plot1a<-PRdata %>%
     
-    ggplot(., aes(x = as.factor(Days.Exposure), y = abs(R.nmol.org.min), group=interaction(Actual.Temp, Treatment.Temp))) +
+    ggplot(., aes(x = as.factor(Days.Exposure), y = R.nmol.org.min)) +
     geom_hline(yintercept=0, linetype="dashed", color="black", size=0.75)+
-    geom_boxplot(aes(group=interaction(Actual.Temp, Treatment.Temp, Days.Exposure), colour=Actual.Temp), position = position_dodge(0.8)) + 
-    geom_point(aes(fill=Actual.Temp, colour=Actual.Temp, shape=Treatment.Temp), size=3, position = position_dodge(0.8)) +
+    geom_point(aes(fill=Actual.Temp, shape=Treatment.Temp, colour=Actual.Temp, group=interaction(Actual.Temp, Days.Exposure, Treatment.Temp)), size=4, position = position_dodge(0.8), alpha=0.6) + 
+    geom_boxplot(aes(colour=Actual.Temp, group=interaction(Actual.Temp, Days.Exposure, Treatment.Temp)), fill=NA, position = position_dodge(0.8), outlier.size = 0 )+
     xlab("Days Exposure") + 
     scale_fill_manual(name="Measurement Temp", values=c("blue","red"))+
     scale_color_manual(name="Measurement Temp", values=c("blue","red"))+
+    scale_shape_manual(name="Treatment", values=c(17,19))+
     ylab(expression(bold(paste("R (nmol ", O[2], " larva"^-1, "min"^-1, ")")))) +
-    #ylim(0, 0.05)+
     theme_classic() + 
     theme(
       legend.position="right",
@@ -180,28 +196,26 @@ r_plot2<-PRdata %>%
       axis.text=element_text(size=12, color="black"), 
       legend.title=element_text(face="bold", size=14), 
       legend.text=element_text(size=12)
-      ); r_plot2
+      ); r_plot1a
 
-ggsave("figures/respirometry/resp_boxplot.png", r_plot2, dpi=300, w=7, h=5, units="in")
+ggsave("figures/respirometry/resp_treatment_boxplot.png", r_plot1a, dpi=300, w=7, h=5, units="in")
 ```
 
-## Plot across actual run temperature  
-
-Plot data by internal temperature for each run     
+Plot photosynthesis. 
 ```{r}
-r_plot4<-PRdata %>%
-    group_by(Temp.C, Treatment.Temp, Days.Exposure)%>%
-    dplyr::summarise(mean=mean(abs(R.nmol.org.min)), sd=sd(abs(R.nmol.org.min)), N=length(R.nmol.org.min), se=sd/sqrt(N))%>%
-  
-    ggplot(., aes(x = as.factor(Temp.C), y = abs(mean), group=interaction(Temp.C, Treatment.Temp))) +
-    facet_wrap(~Days.Exposure, scales="free_x")+
+p_plot1<-PRdata %>%
+    group_by(Actual.Temp, Treatment.Temp, Days.Exposure)%>%
+    dplyr::summarise(mean=mean(P.nmol.org.min), sd=sd(P.nmol.org.min), N=length(P.nmol.org.min), se=sd/sqrt(N))%>%
+    
+    ggplot(., aes(x = as.factor(Days.Exposure), y = mean)) +
     geom_hline(yintercept=0, linetype="dashed", color="black", size=0.75)+
-    geom_point(aes(fill=Treatment.Temp, group=interaction(Treatment.Temp, Temp.C), colour=Treatment.Temp), size=4, position = position_dodge(0.4)) + 
-    geom_errorbar(aes(ymin=mean-se, ymax=mean+se, group=interaction(Treatment.Temp, Temp.C)), width=0, linetype="solid", position=position_dodge(0.4), size=0.8, color="black")+
-    xlab("Measurement Temperature") + 
-    scale_fill_manual(name="Treatment", values=c("blue","red"))+
-    scale_color_manual(name="Treatment", values=c("blue","red"))+
-    ylab(expression(bold(paste("R (nmol ", O[2], " larva"^-1, "min"^-1, ")")))) +
+    geom_point(aes(fill=Actual.Temp, shape=Treatment.Temp, colour=Actual.Temp), size=6, position = position_dodge(0.4)) + 
+    geom_errorbar(aes(ymin=mean-se, ymax=mean+se, group=interaction(Treatment.Temp, Actual.Temp)), width=0, linetype="solid", position=position_dodge(0.4), size=0.8, color="black")+
+    xlab("Days Exposure") + 
+    scale_fill_manual(name="Measurement Temp", values=c("blue","red"))+
+    scale_color_manual(name="Measurement Temp", values=c("blue","red"))+
+    scale_shape_manual(name="Treatment", values=c(17,19))+
+    ylab(expression(bold(paste("P (nmol ", O[2], " larva"^-1, "min"^-1, ")")))) +
     #ylim(0, 0.05)+
     theme_classic() + 
     theme(
@@ -210,11 +224,12 @@ r_plot4<-PRdata %>%
       axis.text=element_text(size=12, color="black"), 
       legend.title=element_text(face="bold", size=14), 
       legend.text=element_text(size=12)
-      ); r_plot4
+      ); p_plot1
 
-ggsave("figures/respirometry/resp_run_temperature.png", r_plot4, dpi=300, w=7, h=5, units="in")
+ggsave("figures/respirometry/photo_treatment.png", p_plot1, dpi=300, w=7, h=5, units="in")
 ```
 
+There is no photosynthesis, we will only analyze respiration. 
 
 # **Analyze data**    
 
@@ -222,10 +237,10 @@ ggsave("figures/respirometry/resp_run_temperature.png", r_plot4, dpi=300, w=7, h
 
 Build linear mixed effect model and examine for Respiration.      
 ```{r, results=TRUE, warning=FALSE, message=FALSE}
-Rmodel1<-lmer(log(1+R.nmol.org.min)~Actual.Temp*Treatment.Temp*Days.Exposure + (1|Tank), data=PRdata) #run as random
-anova(Rmodel1, type="II") 
+Rmodel1<-aov(log(1+R.nmol.org.min)~Actual.Temp*Treatment.Temp*Days.Exposure*Symbiont, data=PRdata) 
+summary(Rmodel1) 
 ```
-There is an effect of temperature and time. 
+There is an effect of measurement temperature, days exposure/time, and interaction with measurement temperature and time. No effect of treatment. No effect of symbiont. 
 
 Check assumptions of model for residual normality and variance. Passes assumptions.    
 
@@ -242,11 +257,11 @@ Generate summary of all respiration data.
 
 ```{r}
 summary<-PRdata%>%
-  group_by(Meas.Temp, Treatment.Temp, Symbiont, Days.Exposure)%>%
+  group_by(Meas.Temp, Treatment.Temp, Days.Exposure)%>%
   summarise(N=length(R.nmol.org.min),
             Mean_R=mean(R.nmol.org.min), 
             SE_R=sd(R.nmol.org.min)/sqrt(length(R.nmol.org.min))); summary
 
-#summary%>%
-  #write_csv(., "Mcap2021/Output/Respiration/mean_respiration.csv")
+summary%>%
+  write_csv(., "output/respirometry/mean_respiration.csv")
 ```

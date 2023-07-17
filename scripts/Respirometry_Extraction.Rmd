@@ -14,8 +14,6 @@ editor_options:
   chunk_output_type: console
 ---
 
-NEED TO FIX LOADING ORDER OF PLATES ISSUE 
-
 ## Setup  
 
 Set up workspace, set options, and load required packages.    
@@ -183,7 +181,7 @@ write.csv(Temp.R, paste0("output/respirometry/Resp_runs_temp.csv")) #save respir
 Save respiration data frames.  
 
 ```{r, results=FALSE, warning=FALSE, message=FALSE}
-#Resp.R <- Resp.R[-1,] #remove empty column
+Resp.R <- Resp.R[-1,] #remove empty column
 
 write.csv(Resp.R, paste0("output/respirometry/Respiration_rates.csv")) #save respiration rate data
 
@@ -306,13 +304,6 @@ colnames(oxygen)[colnames(oxygen) == 'Intercept'] <- 'Photo.Intercept' #rename t
 colnames(oxygen)[colnames(oxygen) == 'umol.L.min'] <- 'P.umol.L.min' #rename to specify P
 ```
 
-Convert air saturation rates to concentration values using respR package (not used here, we did this in the caculation loop).   
-```{r}
-#oxygen<-oxygen%>%
- # mutate(R.umol.L.min=respR::convert_DO(R.perc.air.L.min, from = "%Air", to = "umol/L", t = Meas.Temp, S = Salinity))%>%
-  #mutate(P.umol.L.min=respR::convert_DO(P.perc.air.L.min, from = "%Air", to = "umol/L", t = Meas.Temp, S = Salinity))
-```
-
 Remove samples that have inaccurate slope extraction for respiration rates (determined by PDF output files)  
 
 ```{r}
@@ -381,8 +372,6 @@ colnames(photo.blnk)[colnames(photo.blnk) == 'P.umol.min'] <- 'P.Blank.umol.min'
 oxygen <- full_join(oxygen, resp.blnk) #add R blanks to master
 oxygen <- full_join(oxygen, photo.blnk) #add P blanks to master
 ```
-
-Blanks look good across runs.  
 
 Subtract blank values to generate a "corrected" value for umol O2 min-1.  
 
